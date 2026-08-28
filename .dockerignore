@@ -1,0 +1,17 @@
+.git
+.github
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.pyc
+
+artifacts
+data/bronze
+data/gold
+data/raw/*.csv
+data/silver
+models/registry
+predictions
+reports
+mlruns
