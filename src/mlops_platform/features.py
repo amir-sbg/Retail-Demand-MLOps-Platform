@@ -65,9 +65,15 @@ def make_features(silver: pd.DataFrame) -> pd.DataFrame:
 
     frame["lag_1_units"] = group.shift(1)
     frame["lag_7_units"] = group.shift(7)
-    frame["rolling_7_mean_units"] = group.shift(1).rolling(7, min_periods=3).mean()
-    frame["rolling_14_mean_units"] = group.shift(1).rolling(14, min_periods=5).mean()
-    frame["rolling_7_std_units"] = group.shift(1).rolling(7, min_periods=3).std()
+    frame["rolling_7_mean_units"] = group.transform(
+        lambda values: values.shift(1).rolling(7, min_periods=3).mean()
+    )
+    frame["rolling_14_mean_units"] = group.transform(
+        lambda values: values.shift(1).rolling(14, min_periods=5).mean()
+    )
+    frame["rolling_7_std_units"] = group.transform(
+        lambda values: values.shift(1).rolling(7, min_periods=3).std()
+    )
     frame["day_sin"] = np.sin(2.0 * np.pi * frame["day_of_week"] / 7.0)
     frame["day_cos"] = np.cos(2.0 * np.pi * frame["day_of_week"] / 7.0)
     frame["month_sin"] = np.sin(2.0 * np.pi * frame["month"] / 12.0)
