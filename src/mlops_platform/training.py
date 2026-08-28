@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import joblib
+import pandas as pd
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+from mlops_platform.config import PipelineConfig
+from mlops_platform.features import model_matrix
+from mlops_platform.metrics import (
+    naive_forecast,
+    regression_metrics,
+    residual_summary,
+    save_json,
+    time_splits,
+)
+from mlops_platform.tracking import ExperimentTracker
+
+
+@dataclass(frozen=True)
+class TrainingResult:
+    run_id: str
+    run_dir: Path
+    model_path: Path
+    metrics: dict
+    feature_columns: list[str]
+    promoted: bool = False
+
+
+def train_forecaster(config: PipelineConfig) -> TrainingResult:
+    config.validate()
+    feature_frame = pd.read_csv(config.data.feature_path, parse_dates=["date"])
+    train, validation, test = time_splits(
+        feature_frame,
+        validation_days=config.training.validation_days,
+        test_days=config.training.test_days,
+    )
+    matrices = _split_model_matrices(train, validation, test)
+    y_train = train[config.training.target_column].to_numpy(dtype=float)
+    y_validation = validation[config.training.target_column].to_numpy(dtype=float)
+    y_test = test[config.training.target_column].to_numpy(dtype=float)
+
+    model = HistGradientBoostingRegressor(
+        max_iter=220,
+        learning_rate=0.055,
+        l2_regularization=0.04,
+        max_leaf_nodes=31,
+        random_state=config.training.random_state,
+    )
+
+    tracker = ExperimentTracker(config.tracking)
+    run = tracker.start_run(config.to_dict())
+    tracker.log_params(
+        run,
+        {
+            "model_type": "HistGradientBoostingRegressor",
+            "feature_count": len(matrices.feature_columns),
+            "train_rows": len(train),
+            "validation_rows": len(validation),
+            "test_rows": len(test),
+        },
+    )
+
+    model.fit(matrices.x_train, y_train)
+    validation_predictions = model.predict(matrices.x_validation)
+    test_predictions = model.predict(matrices.x_test)
+    baseline_validation = naive_forecast(validation)
+    baseline_test = naive_forecast(test)
+
+    metrics = {
+        "validation": regression_metrics(y_validation, validation_predictions),
+        "test": regression_metrics(y_test, test_predictions),
+        "baseline_validation": regression_metrics(y_validation, baseline_validation),
+        "baseline_test": regression_metrics(y_test, baseline_test),
+        "residuals": residual_summary(y_test, test_predictions),
+    }
+    metrics["validation"]["mae_vs_baseline"] = (
+        metrics["validation"]["mae"] / metrics["baseline_validation"]["mae"]
+    )
+
+    model_path = run.run_dir / "model.joblib"
+    joblib.dump(
+        {
+            "model": model,
+            "feature_columns": matrices.feature_columns,
+            "target_column": config.training.target_column,
+        },
+        model_path,
+    )
+    save_json(metrics, run.run_dir / "metrics.json")
+    _write_predictions(test, test_predictions, run.run_dir / "test_predictions.csv")
+    _write_training_profile(train, matrices.x_train, y_train, metrics, config)
+    tracker.log_metrics(run, _flat_metric_dict(metrics))
+    tracker.log_artifact(run, model_path)
+
+    return TrainingResult(
+        run_id=run.run_id,
+        run_dir=run.run_dir,
+        model_path=model_path,
+        metrics=metrics,
+        feature_columns=matrices.feature_columns,
+    )
+
+
+@dataclass(frozen=True)
+class SplitMatrices:
+    x_train: pd.DataFrame
+    x_validation: pd.DataFrame
+    x_test: pd.DataFrame
+    feature_columns: list[str]
+
+
+def _split_model_matrices(
+    train: pd.DataFrame,
+    validation: pd.DataFrame,
+    test: pd.DataFrame,
+) -> SplitMatrices:
+    combined = pd.concat(
+        [
+            train.assign(_split="train"),
+            validation.assign(_split="validation"),
+            test.assign(_split="test"),
+        ],
+        ignore_index=True,
+    )
+    matrix, feature_columns = model_matrix(combined)
+    split = combined["_split"]
+    return SplitMatrices(
+        x_train=matrix[split == "train"].reset_index(drop=True),
+        x_validation=matrix[split == "validation"].reset_index(drop=True),
+        x_test=matrix[split == "test"].reset_index(drop=True),
+        feature_columns=feature_columns,
+    )
+
+
+def _write_predictions(test: pd.DataFrame, predictions, path: Path) -> None:
+    output = test[["date", "store_id", "sku_id", "units_sold"]].copy()
+    output["prediction"] = predictions
+    output["absolute_error"] = (output["prediction"] - output["units_sold"]).abs()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    output.to_csv(path, index=False)
+
+
+def _write_training_profile(
+    train: pd.DataFrame,
+    x_train: pd.DataFrame,
+    y_train,
+    metrics: dict,
+    config: PipelineConfig,
+) -> None:
+    profile = {
+        "row_count": len(train),
+        "min_date": train["date"].min().date().isoformat(),
+        "max_date": train["date"].max().date().isoformat(),
+        "target": {
+            "mean": float(pd.Series(y_train).mean()),
+            "std": float(pd.Series(y_train).std()),
+        },
+        "features": {
+            column: {
+                "mean": float(x_train[column].mean()),
+                "std": float(x_train[column].std()),
+            }
+            for column in x_train.columns
+        },
+        "reference_metrics": metrics["test"],
+    }
+    save_json(profile, config.monitoring.baseline_profile_path)
+
+
+def _flat_metric_dict(metrics: dict) -> dict[str, float]:
+    flat = {}
+    for group, values in metrics.items():
+        for name, value in values.items():
+            if isinstance(value, (int, float)):
+                flat[f"{group}_{name}"] = float(value)
+    return flat
