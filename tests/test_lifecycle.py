@@ -13,7 +13,7 @@ from mlops_platform.features import build_feature_table
 from mlops_platform.inference import batch_predict
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import regression_metrics, time_splits
-from mlops_platform.monitoring import monitor_predictions, psi_from_stats
+from mlops_platform.monitoring import monitor_predictions, psi_from_bins, psi_from_stats
 from mlops_platform.registry import promotion_decision, register_candidate
 from mlops_platform.retraining import build_retraining_plan
 from mlops_platform.training import train_forecaster
@@ -119,6 +119,13 @@ def test_promotion_decision_applies_quality_gates() -> None:
 def test_psi_increases_for_shifted_distribution() -> None:
     near = psi_from_stats(10.0, 1.0, np.linspace(8.5, 11.5, 100))
     shifted = psi_from_stats(10.0, 1.0, np.linspace(15.0, 18.0, 100))
+
+    assert shifted > near
+
+
+def test_psi_from_bins_uses_stored_reference_shares() -> None:
+    near = psi_from_bins([0.0, 5.0, 10.0], [0.5, 0.5], np.array([1.0, 2.0, 8.0, 9.0]))
+    shifted = psi_from_bins([0.0, 5.0, 10.0], [0.5, 0.5], np.array([8.0, 9.0, 9.5, 9.8]))
 
     assert shifted > near
 

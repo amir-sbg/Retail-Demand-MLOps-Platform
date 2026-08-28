@@ -36,12 +36,11 @@ def monitor_predictions(
     predictions = pd.read_csv(prediction_log_path)
     current = build_prediction_profile(predictions)
 
-    baseline_target = baseline["target"]
+    reference = baseline.get("prediction_reference", baseline["target"])
     drift = {
-        "predicted_units_psi": psi_from_stats(
-            mean=float(baseline_target["mean"]),
-            std=float(baseline_target["std"]),
-            observed=predictions["predicted_units"].to_numpy(dtype=float),
+        "predicted_units_psi": psi_from_profile(
+            reference,
+            predictions["predicted_units"].to_numpy(dtype=float),
         )
     }
     quality = current.get("quality", {})
@@ -61,6 +60,41 @@ def monitor_predictions(
     }
     save_json(report, output_path)
     return report
+
+
+def psi_from_profile(reference: dict, observed: np.ndarray) -> float:
+    if "bin_edges" in reference and "expected_share" in reference:
+        return psi_from_bins(
+            reference["bin_edges"],
+            reference["expected_share"],
+            observed,
+        )
+    return psi_from_stats(
+        mean=float(reference["mean"]),
+        std=float(reference["std"]),
+        observed=observed,
+    )
+
+
+def psi_from_bins(bin_edges: list[float], expected_share: list[float], observed: np.ndarray) -> float:
+    values = np.asarray(observed, dtype=float)
+    if values.size == 0 or not np.all(np.isfinite(values)):
+        raise ValueError("observed values must be non-empty and finite")
+    edges = np.asarray(bin_edges, dtype=float).copy()
+    expected = np.asarray(expected_share, dtype=float)
+    if edges.size < 3:
+        raise ValueError("at least two bins are required for PSI")
+    if expected.shape[0] != edges.shape[0] - 1:
+        raise ValueError("expected_share must have one value per bin")
+    if not np.all(np.diff(edges) > 0):
+        raise ValueError("bin_edges must be strictly increasing")
+
+    edges[0] = min(edges[0], values.min()) - 1e-6
+    edges[-1] = max(edges[-1], values.max()) + 1e-6
+    observed_counts, _ = np.histogram(values, bins=edges)
+    expected = np.clip(expected / expected.sum(), 1e-6, 1.0)
+    observed_share = np.clip(observed_counts / observed_counts.sum(), 1e-6, 1.0)
+    return float(np.sum((observed_share - expected) * np.log(observed_share / expected)))
 
 
 def psi_from_stats(mean: float, std: float, observed: np.ndarray, bins: int = 10) -> float:

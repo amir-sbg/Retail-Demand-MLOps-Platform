@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 
@@ -91,7 +92,14 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
     )
     save_json(metrics, run.run_dir / "metrics.json")
     _write_predictions(test, test_predictions, run.run_dir / "test_predictions.csv")
-    _write_training_profile(train, matrices.x_train, y_train, metrics, config)
+    _write_training_profile(
+        train,
+        matrices.x_train,
+        y_train,
+        test_predictions,
+        metrics,
+        config,
+    )
     tracker.log_metrics(run, _flat_metric_dict(metrics))
     tracker.log_artifact(run, model_path)
 
@@ -147,6 +155,7 @@ def _write_training_profile(
     train: pd.DataFrame,
     x_train: pd.DataFrame,
     y_train,
+    reference_predictions,
     metrics: dict,
     config: PipelineConfig,
 ) -> None:
@@ -158,6 +167,7 @@ def _write_training_profile(
             "mean": float(pd.Series(y_train).mean()),
             "std": float(pd.Series(y_train).std()),
         },
+        "prediction_reference": _reference_distribution(reference_predictions),
         "features": {
             column: {
                 "mean": float(x_train[column].mean()),
@@ -168,6 +178,35 @@ def _write_training_profile(
         "reference_metrics": metrics["test"],
     }
     save_json(profile, config.monitoring.baseline_profile_path)
+
+
+def _reference_distribution(values, bins: int = 10) -> dict:
+    data = np.asarray(values, dtype=float)
+    if data.size == 0 or not np.all(np.isfinite(data)):
+        raise ValueError("reference predictions must be non-empty and finite")
+    edges = np.quantile(data, np.linspace(0.0, 1.0, bins + 1))
+    edges = _strictly_increasing_edges(edges)
+    counts, _ = np.histogram(data, bins=edges)
+    expected_share = counts / counts.sum()
+    return {
+        "mean": float(np.mean(data)),
+        "std": float(np.std(data)),
+        "p10": float(np.percentile(data, 10)),
+        "p50": float(np.percentile(data, 50)),
+        "p90": float(np.percentile(data, 90)),
+        "bin_edges": [float(edge) for edge in edges],
+        "expected_share": [float(value) for value in expected_share],
+    }
+
+
+def _strictly_increasing_edges(edges: np.ndarray) -> np.ndarray:
+    adjusted = np.asarray(edges, dtype=float).copy()
+    for index in range(1, len(adjusted)):
+        if adjusted[index] <= adjusted[index - 1]:
+            adjusted[index] = adjusted[index - 1] + 1e-6
+    adjusted[0] -= 1e-6
+    adjusted[-1] += 1e-6
+    return adjusted
 
 
 def _flat_metric_dict(metrics: dict) -> dict[str, float]:
