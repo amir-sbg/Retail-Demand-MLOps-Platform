@@ -11,6 +11,7 @@ from mlops_platform.inference import batch_predict
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.monitoring import monitor_predictions
 from mlops_platform.registry import register_candidate
+from mlops_platform.retraining import build_retraining_plan
 from mlops_platform.training import train_forecaster
 
 
@@ -51,6 +52,12 @@ def main() -> None:
             config.monitoring,
         )
         _print(report)
+    elif args.command == "retrain-plan":
+        plan = build_retraining_plan(
+            config.monitoring.drift_report_path,
+            Path("reports/retraining_plan.json"),
+        )
+        _print(plan)
     elif args.command == "run-all":
         _run_all(config)
 
@@ -66,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
         "train",
         "batch-predict",
         "monitor",
+        "retrain-plan",
         "run-all",
     ):
         add = subcommands.add_parser(command)
