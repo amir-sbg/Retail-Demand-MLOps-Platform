@@ -21,7 +21,7 @@ raw demand data
 - Gradient-boosted demand model with baseline comparison, residual summaries, and promotion gates
 - Local experiment tracking that can also log to MLflow when MLflow is installed
 - Lightweight model registry with champion/candidate stages
-- Batch scoring, FastAPI serving, prediction logging, drift checks, and retraining-plan generation
+- Batch scoring, FastAPI serving, prediction logging, PSI drift checks, segment-level error reports, and retraining-plan generation
 - Pytest coverage, Docker packaging, and GitHub Actions CI
 
 ## Tech stack
@@ -86,4 +86,4 @@ src/mlops_platform/
   spark_jobs.py    # optional Spark feature job
 ```
 
-The project is designed around the kind of lifecycle work that matters in production ML: keeping data transformations reproducible, comparing against a baseline, promoting models only when gates pass, and monitoring whether the deployed model still behaves like the model that was validated.
+The project is designed around the kind of lifecycle work that matters in production ML: keeping data transformations reproducible, comparing against a baseline with demand-specific metrics such as WAPE and sMAPE, promoting models only when gates pass, and monitoring whether the deployed model still behaves like the model that was validated.
