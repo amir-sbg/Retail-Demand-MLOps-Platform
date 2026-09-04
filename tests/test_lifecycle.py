@@ -103,6 +103,18 @@ def test_regression_metrics_reject_bad_arrays() -> None:
         regression_metrics(np.array([1.0]), np.array([1.0, 2.0]))
 
 
+def test_regression_metrics_include_demand_forecast_diagnostics() -> None:
+    metrics = regression_metrics(
+        np.array([10.0, 20.0, 30.0]),
+        np.array([12.0, 16.0, 33.0]),
+    )
+
+    assert metrics["wape"] == pytest.approx(9.0 / 60.0)
+    assert metrics["smape"] > 0.0
+    assert metrics["under_forecast_rate"] == pytest.approx(1 / 3)
+    assert metrics["over_forecast_rate"] == pytest.approx(2 / 3)
+
+
 def test_promotion_decision_applies_quality_gates() -> None:
     config = _tmp_config(Path("/tmp/mlops-test"))
     metrics = {

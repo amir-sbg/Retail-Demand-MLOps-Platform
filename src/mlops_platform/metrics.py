@@ -37,6 +37,8 @@ def regression_metrics(y_true, y_pred) -> dict[str, float]:
     mse = float(np.mean(residuals**2))
     mae = float(np.mean(np.abs(residuals)))
     denominator = np.maximum(np.abs(actual), 1.0)
+    demand_total = float(np.sum(np.abs(actual)))
+    symmetric_denominator = np.maximum((np.abs(actual) + np.abs(predicted)) / 2.0, 1.0)
     ss_total = float(np.sum((actual - actual.mean()) ** 2))
     r2 = 1.0 if ss_total == 0.0 and mse == 0.0 else 0.0
     if ss_total > 0:
@@ -45,8 +47,12 @@ def regression_metrics(y_true, y_pred) -> dict[str, float]:
         "mae": mae,
         "rmse": float(np.sqrt(mse)),
         "mape": float(np.mean(np.abs(residuals) / denominator)),
+        "wape": float(np.sum(np.abs(residuals)) / demand_total) if demand_total > 0 else 0.0,
+        "smape": float(np.mean(np.abs(residuals) / symmetric_denominator)),
         "r2": r2,
         "bias": float(np.mean(residuals)),
+        "under_forecast_rate": float(np.mean(predicted < actual)),
+        "over_forecast_rate": float(np.mean(predicted > actual)),
     }
 
 
