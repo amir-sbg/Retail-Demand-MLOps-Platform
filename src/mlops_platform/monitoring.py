@@ -44,6 +44,11 @@ def monitor_predictions(
         )
     }
     quality = current.get("quality", {})
+    segments = segment_quality_report(
+        predictions,
+        segment_columns=("store_id", "category"),
+        min_rows=5,
+    )
     reference_mae = float(baseline.get("reference_metrics", {}).get("mae", 0.0))
     current_mae = float(quality.get("mae", 0.0)) if quality else 0.0
     retrain = drift["predicted_units_psi"] >= config.psi_threshold
@@ -54,12 +59,54 @@ def monitor_predictions(
         "rows": current["rows"],
         "drift": drift,
         "quality": quality,
+        "segments": segments,
         "reference_mae": reference_mae,
         "retrain_recommended": retrain,
         "reason": _reason(drift["predicted_units_psi"], current_mae, reference_mae, config),
     }
     save_json(report, output_path)
     return report
+
+
+def segment_quality_report(
+    predictions: pd.DataFrame,
+    segment_columns: tuple[str, ...] = ("store_id", "category"),
+    min_rows: int = 10,
+) -> list[dict[str, float | int | str]]:
+    if min_rows < 1:
+        raise ValueError("min_rows must be positive")
+    required = {"actual_units", "predicted_units"}
+    if not required.issubset(predictions.columns):
+        return []
+
+    available_segments = [column for column in segment_columns if column in predictions.columns]
+    if not available_segments:
+        return []
+
+    rows = []
+    for keys, group in predictions.groupby(available_segments, dropna=False):
+        if len(group) < min_rows:
+            continue
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        actual = group["actual_units"].to_numpy(dtype=float)
+        predicted = group["predicted_units"].to_numpy(dtype=float)
+        if not np.all(np.isfinite(actual)) or not np.all(np.isfinite(predicted)):
+            continue
+        metrics = regression_metrics(actual, predicted)
+        row = {
+            "segment": " / ".join(f"{name}={value}" for name, value in zip(available_segments, keys)),
+            "rows": int(len(group)),
+            "mean_actual": float(np.mean(actual)),
+            "mean_predicted": float(np.mean(predicted)),
+            "mae": metrics["mae"],
+            "wape": metrics["wape"],
+            "bias": metrics["bias"],
+        }
+        rows.append(row)
+
+    rows.sort(key=lambda row: (float(row["mae"]), float(row["rows"])), reverse=True)
+    return rows[:10]
 
 
 def psi_from_profile(reference: dict, observed: np.ndarray) -> float:

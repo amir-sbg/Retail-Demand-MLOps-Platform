@@ -13,7 +13,7 @@ from mlops_platform.features import build_feature_table
 from mlops_platform.inference import batch_predict
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import regression_metrics, time_splits
-from mlops_platform.monitoring import monitor_predictions, psi_from_bins, psi_from_stats
+from mlops_platform.monitoring import monitor_predictions, psi_from_bins, psi_from_stats, segment_quality_report
 from mlops_platform.registry import promotion_decision, register_candidate
 from mlops_platform.retraining import build_retraining_plan
 from mlops_platform.training import train_forecaster
@@ -170,3 +170,19 @@ def test_monitoring_recommends_retraining_on_error_degradation(tmp_path: Path) -
     )
 
     assert report["retrain_recommended"]
+
+
+def test_segment_quality_report_ranks_segments_by_error() -> None:
+    predictions = pd.DataFrame(
+        {
+            "store_id": ["s1", "s1", "s2", "s2"],
+            "category": ["grocery", "grocery", "grocery", "grocery"],
+            "predicted_units": [10.0, 11.0, 25.0, 30.0],
+            "actual_units": [10.0, 12.0, 10.0, 10.0],
+        }
+    )
+
+    rows = segment_quality_report(predictions, segment_columns=("store_id",), min_rows=2)
+
+    assert rows[0]["segment"] == "store_id=s2"
+    assert rows[0]["mae"] > rows[1]["mae"]
