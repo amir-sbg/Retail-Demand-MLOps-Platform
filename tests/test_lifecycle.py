@@ -13,7 +13,13 @@ from mlops_platform.features import build_feature_table
 from mlops_platform.inference import batch_predict
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import regression_metrics, time_splits
-from mlops_platform.monitoring import monitor_predictions, psi_from_bins, psi_from_stats, segment_quality_report
+from mlops_platform.monitoring import (
+    monitor_predictions,
+    monitoring_alerts,
+    psi_from_bins,
+    psi_from_stats,
+    segment_quality_report,
+)
 from mlops_platform.registry import promotion_decision, register_candidate
 from mlops_platform.retraining import build_retraining_plan
 from mlops_platform.training import train_forecaster
@@ -173,6 +179,32 @@ def test_monitoring_recommends_retraining_on_error_degradation(tmp_path: Path) -
     )
 
     assert report["retrain_recommended"]
+    assert "error_degradation" in {alert["type"] for alert in report["alerts"]}
+
+
+def test_monitoring_alerts_include_drift_and_segment_details() -> None:
+    alerts = monitoring_alerts(
+        psi=0.35,
+        current_mae=2.5,
+        reference_mae=1.0,
+        segments=[
+            {
+                "segment": "category=frozen",
+                "rows": 12,
+                "mae": 2.3,
+                "wape": 0.2,
+                "bias": -0.3,
+            }
+        ],
+        config=MonitoringConfig(psi_threshold=0.2, mae_degradation_ratio=1.5),
+    )
+
+    assert [alert["type"] for alert in alerts] == [
+        "prediction_drift",
+        "error_degradation",
+        "segment_error",
+    ]
+    assert alerts[-1]["segment"] == "category=frozen"
 
 
 def test_segment_quality_report_ranks_segments_by_error() -> None:

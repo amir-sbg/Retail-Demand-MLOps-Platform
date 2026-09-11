@@ -51,21 +51,78 @@ def monitor_predictions(
     )
     reference_mae = float(baseline.get("reference_metrics", {}).get("mae", 0.0))
     current_mae = float(quality.get("mae", 0.0)) if quality else 0.0
-    retrain = drift["predicted_units_psi"] >= config.psi_threshold
-    if reference_mae > 0 and current_mae > reference_mae * config.mae_degradation_ratio:
-        retrain = True
+    alerts = monitoring_alerts(
+        psi=drift["predicted_units_psi"],
+        current_mae=current_mae,
+        reference_mae=reference_mae,
+        segments=segments,
+        config=config,
+    )
+    retrain = bool(alerts)
+    reason = str(alerts[0]["message"]) if alerts else "no retraining trigger crossed"
 
     report = {
         "rows": current["rows"],
         "drift": drift,
         "quality": quality,
         "segments": segments,
+        "alerts": alerts,
         "reference_mae": reference_mae,
         "retrain_recommended": retrain,
-        "reason": _reason(drift["predicted_units_psi"], current_mae, reference_mae, config),
+        "reason": reason,
     }
     save_json(report, output_path)
     return report
+
+
+def monitoring_alerts(
+    psi: float,
+    current_mae: float,
+    reference_mae: float,
+    segments: list[dict[str, float | int | str]],
+    config: MonitoringConfig,
+) -> list[dict[str, float | str]]:
+    alerts: list[dict[str, float | str]] = []
+    if psi >= config.psi_threshold:
+        alerts.append(
+            {
+                "type": "prediction_drift",
+                "severity": "high",
+                "value": round(float(psi), 6),
+                "threshold": config.psi_threshold,
+                "message": "prediction PSI exceeded the monitoring threshold",
+            }
+        )
+
+    if reference_mae > 0:
+        mae_threshold = reference_mae * config.mae_degradation_ratio
+        if current_mae > mae_threshold:
+            alerts.append(
+                {
+                    "type": "error_degradation",
+                    "severity": "high",
+                    "value": round(float(current_mae), 6),
+                    "threshold": round(float(mae_threshold), 6),
+                    "message": "current MAE degraded against the training reference",
+                }
+            )
+
+        if segments:
+            worst_segment = segments[0]
+            segment_mae = float(worst_segment["mae"])
+            segment_threshold = mae_threshold * 1.25
+            if segment_mae > segment_threshold:
+                alerts.append(
+                    {
+                        "type": "segment_error",
+                        "severity": "medium",
+                        "value": round(segment_mae, 6),
+                        "threshold": round(segment_threshold, 6),
+                        "segment": str(worst_segment["segment"]),
+                        "message": "one monitored segment is materially worse than baseline",
+                    }
+                )
+    return alerts
 
 
 def segment_quality_report(
@@ -170,11 +227,3 @@ def _distribution_profile(values: np.ndarray) -> dict[str, float]:
         "p50": float(np.percentile(values, 50)),
         "p90": float(np.percentile(values, 90)),
     }
-
-
-def _reason(psi: float, current_mae: float, reference_mae: float, config: MonitoringConfig) -> str:
-    if psi >= config.psi_threshold:
-        return "prediction distribution drift is above the PSI threshold"
-    if reference_mae > 0 and current_mae > reference_mae * config.mae_degradation_ratio:
-        return "prediction error degraded beyond the configured gate"
-    return "no retraining trigger crossed"
