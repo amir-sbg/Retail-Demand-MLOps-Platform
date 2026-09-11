@@ -20,10 +20,15 @@ FEATURE_COLUMNS = (
     "month_cos",
     "lag_1_units",
     "lag_7_units",
+    "lag_14_units",
     "rolling_7_mean_units",
     "rolling_14_mean_units",
+    "rolling_28_mean_units",
     "rolling_7_std_units",
+    "rolling_14_std_units",
+    "rolling_mean_delta_7_28",
     "price_vs_sku_avg",
+    "promotion_price",
     "sku_avg_units",
     "store_avg_units",
 )
@@ -65,14 +70,21 @@ def make_features(silver: pd.DataFrame) -> pd.DataFrame:
 
     frame["lag_1_units"] = group.shift(1)
     frame["lag_7_units"] = group.shift(7)
+    frame["lag_14_units"] = group.shift(14)
     frame["rolling_7_mean_units"] = group.transform(
         lambda values: values.shift(1).rolling(7, min_periods=3).mean()
     )
     frame["rolling_14_mean_units"] = group.transform(
         lambda values: values.shift(1).rolling(14, min_periods=5).mean()
     )
+    frame["rolling_28_mean_units"] = group.transform(
+        lambda values: values.shift(1).rolling(28, min_periods=7).mean()
+    )
     frame["rolling_7_std_units"] = group.transform(
         lambda values: values.shift(1).rolling(7, min_periods=3).std()
+    )
+    frame["rolling_14_std_units"] = group.transform(
+        lambda values: values.shift(1).rolling(14, min_periods=5).std()
     )
     frame["day_sin"] = np.sin(2.0 * np.pi * frame["day_of_week"] / 7.0)
     frame["day_cos"] = np.cos(2.0 * np.pi * frame["day_of_week"] / 7.0)
@@ -81,6 +93,10 @@ def make_features(silver: pd.DataFrame) -> pd.DataFrame:
 
     sku_avg_price = frame.groupby("sku_id")["price"].transform("mean")
     frame["price_vs_sku_avg"] = frame["price"] - sku_avg_price
+    frame["promotion_price"] = frame["promotion"] * frame["price"]
+    frame["rolling_mean_delta_7_28"] = (
+        frame["rolling_7_mean_units"] - frame["rolling_28_mean_units"]
+    )
     frame["sku_avg_units"] = group.transform("mean")
     frame["store_avg_units"] = frame.groupby("store_id")["units_sold"].transform("mean")
     frame["entity_id"] = frame["store_id"] + "::" + frame["sku_id"]

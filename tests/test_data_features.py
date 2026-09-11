@@ -52,7 +52,7 @@ def test_lake_layers_write_validated_tables(tmp_path) -> None:
 
 
 def test_feature_engineering_keeps_windows_inside_each_series() -> None:
-    dates = pd.date_range("2025-01-01", periods=10)
+    dates = pd.date_range("2025-01-01", periods=35)
     rows = []
     for sku, base in [("a", 10), ("b", 100)]:
         for index, date in enumerate(dates):
@@ -63,7 +63,7 @@ def test_feature_engineering_keeps_windows_inside_each_series() -> None:
                     "sku_id": sku,
                     "category": "grocery",
                     "price": 5.0,
-                    "promotion": 0,
+                    "promotion": int(index % 2 == 0),
                     "stockout": 0,
                     "temperature": 60.0,
                     "is_weekend": int(date.dayofweek in [5, 6]),
@@ -73,9 +73,15 @@ def test_feature_engineering_keeps_windows_inside_each_series() -> None:
                 }
             )
     features = make_features(pd.DataFrame(rows))
-    b_day_8 = features[(features["sku_id"] == "b") & (features["date"] == dates[8])].iloc[0]
+    b_day_28 = features[(features["sku_id"] == "b") & (features["date"] == dates[28])].iloc[0]
 
-    assert b_day_8["rolling_7_mean_units"] == pytest.approx(np.mean([101, 102, 103, 104, 105, 106, 107]))
+    assert b_day_28["lag_14_units"] == 114
+    assert b_day_28["rolling_7_mean_units"] == pytest.approx(
+        np.mean([121, 122, 123, 124, 125, 126, 127])
+    )
+    assert b_day_28["rolling_28_mean_units"] == pytest.approx(np.mean(range(100, 128)))
+    assert b_day_28["rolling_mean_delta_7_28"] == pytest.approx(10.5)
+    assert b_day_28["promotion_price"] == 5.0
 
 
 def test_model_matrix_adds_numeric_and_categorical_columns() -> None:
