@@ -77,6 +77,9 @@ def test_end_to_end_lifecycle_runs_on_temp_paths(tmp_path: Path) -> None:
 
     assert record.promoted
     assert result.model_path.exists()
+    model_card = result.run_dir / "model_card.md"
+    assert model_card.exists()
+    assert "HistGradientBoostingRegressor" in model_card.read_text(encoding="utf-8")
     assert (config.tracking.registry_dir / "champion" / "model.joblib").exists()
     assert len(predictions) > 0
     assert "retrain_recommended" in drift

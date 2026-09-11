@@ -92,6 +92,15 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
     )
     save_json(metrics, run.run_dir / "metrics.json")
     _write_predictions(test, test_predictions, run.run_dir / "test_predictions.csv")
+    model_card_path = _write_model_card(
+        run.run_dir / "model_card.md",
+        train,
+        validation,
+        test,
+        matrices.feature_columns,
+        metrics,
+        config,
+    )
     _write_training_profile(
         train,
         matrices.x_train,
@@ -102,6 +111,7 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
     )
     tracker.log_metrics(run, _flat_metric_dict(metrics))
     tracker.log_artifact(run, model_path)
+    tracker.log_artifact(run, model_card_path)
 
     return TrainingResult(
         run_id=run.run_id,
@@ -149,6 +159,54 @@ def _write_predictions(test: pd.DataFrame, predictions, path: Path) -> None:
     output["absolute_error"] = (output["prediction"] - output["units_sold"]).abs()
     path.parent.mkdir(parents=True, exist_ok=True)
     output.to_csv(path, index=False)
+
+
+def _write_model_card(
+    path: Path,
+    train: pd.DataFrame,
+    validation: pd.DataFrame,
+    test: pd.DataFrame,
+    feature_columns: list[str],
+    metrics: dict,
+    config: PipelineConfig,
+) -> Path:
+    validation_metrics = metrics["validation"]
+    baseline_metrics = metrics["baseline_validation"]
+    test_metrics = metrics["test"]
+    train_start, train_end = train["date"].min().date(), train["date"].max().date()
+    validation_start = validation["date"].min().date()
+    validation_end = validation["date"].max().date()
+    test_start, test_end = test["date"].min().date(), test["date"].max().date()
+    card = f"""# Retail Demand Forecast Model
+
+This run trains a `HistGradientBoostingRegressor` for store-SKU demand forecasting. The
+pipeline builds calendar, lag, rolling-window, promotion, price, and categorical features,
+then compares the model against a rolling naive forecast before registration.
+
+## Data window
+
+- Train: {len(train)} rows, {train_start} to {train_end}
+- Validation: {len(validation)} rows, {validation_start} to {validation_end}
+- Test: {len(test)} rows, {test_start} to {test_end}
+- Features: {len(feature_columns)}
+
+## Quality gates
+
+- Minimum validation R2: {config.training.min_validation_r2:.3f}
+- Max candidate/baseline MAE ratio: {config.training.max_champion_mae_ratio:.3f}
+- Validation MAE: {validation_metrics["mae"]:.3f}
+- Baseline validation MAE: {baseline_metrics["mae"]:.3f}
+- Validation MAE ratio: {validation_metrics["mae_vs_baseline"]:.3f}
+- Test WAPE: {test_metrics["wape"]:.3f}
+
+## Operational notes
+
+The training profile saved with this run becomes the reference distribution for production
+monitoring. Prediction drift, segment error, and MAE degradation are checked before the
+next retraining decision.
+"""
+    path.write_text(card, encoding="utf-8")
+    return path
 
 
 def _write_training_profile(
