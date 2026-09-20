@@ -1,57 +1,50 @@
 # Retail Demand MLOps Platform
 
-An end-to-end MLOps project for demand forecasting. The model is intentionally simple; the focus is the production workflow around it: data layers, feature engineering, training, experiment tracking, model promotion, inference, monitoring, and retraining decisions.
+An end-to-end demand-forecasting system whose main goal is to demonstrate the ML lifecycle around a model: reproducible data layers, time-aware features, training, promotion, serving, monitoring, and retraining decisions.
 
 ```text
 raw demand data
   -> bronze / silver / gold tables
   -> time-aware features
-  -> training + experiment tracking
-  -> model registry gate
-  -> batch and FastAPI inference
-  -> drift / quality monitoring
+  -> training and experiment tracking
+  -> registry quality gate
+  -> batch or FastAPI inference
+  -> drift and error monitoring
   -> retraining plan
 ```
 
-## What is inside
+The example data includes seasonality, promotions, prices, stockouts, and store/SKU effects. A gradient-boosted regressor is compared with a simple baseline using forecasting metrics such as WAPE and sMAPE. The modeling problem stays small so the data and deployment workflow are easy to follow.
 
-- Synthetic retail demand data generator with seasonality, promotions, prices, stockouts, and store/SKU effects
-- Bronze, silver, and gold feature-table pipeline, with an optional Spark/Delta implementation path
-- Time-based train/validation/test split for forecasting instead of random leakage-prone splitting
-- Gradient-boosted demand model with baseline comparison, residual summaries, and promotion gates
-- Local experiment tracking that can also log to MLflow when MLflow is installed
-- Lightweight model registry with champion/candidate stages
-- Batch scoring, FastAPI serving, prediction logging, PSI drift checks, segment-level error reports, and retraining-plan generation
-- Pytest coverage, Docker packaging, and GitHub Actions CI
+## Included
 
-## Tech stack
+- deterministic synthetic demand generation and validation
+- bronze, silver, and gold table builders, with an optional Spark/Delta path
+- time-based train/validation/test splitting to avoid future leakage
+- local experiment tracking with optional MLflow integration
+- candidate/champion model registry and promotion gates
+- batch scoring and FastAPI serving
+- PSI drift checks, segment-level error reports, and retraining plans
+- pytest coverage, Docker packaging, and GitHub Actions CI
 
-Python, pandas, scikit-learn, optional Spark/Delta Lake, optional MLflow, FastAPI, Docker, pytest, ruff, and GitHub Actions.
-
-## Quick start
+## Setup
 
 ```bash
+git clone https://github.com/amir-sbg/Retail-Demand-MLOps-Platform.git
+cd Retail-Demand-MLOps-Platform
 python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
+source .venv/bin/activate       # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install -e .
-
 python -m pytest -q
+```
+
+Run the complete local workflow:
+
+```bash
 mlops-demand run-all
 ```
 
-The full run writes generated data, run artifacts, registry files, predictions, and monitoring reports into ignored local folders:
-
-```text
-data/
-artifacts/
-models/registry/
-predictions/
-reports/
-```
-
-## Useful commands
+Individual stages are also available:
 
 ```bash
 mlops-demand make-data
@@ -63,27 +56,21 @@ mlops-demand monitor
 mlops-demand retrain-plan
 ```
 
-Run the API after a champion model has been registered:
+The run writes generated data, model artifacts, predictions, registry files, and monitoring reports under `data/`, `artifacts/`, `models/registry/`, `predictions/`, and `reports/`. To start the API after a champion has been registered, install `requirements-api.txt` and run `uvicorn mlops_platform.api:app --reload`.
 
-```bash
-python -m pip install -r requirements-api.txt
-uvicorn mlops_platform.api:app --reload
-```
-
-## Project structure
+## Project layout
 
 ```text
 src/mlops_platform/
-  data.py          # raw demand generation and validation
-  lake.py          # bronze and silver table builders
-  features.py      # forecasting feature engineering
-  training.py      # model training and experiment output
-  registry.py      # candidate/champion model promotion
-  inference.py     # batch and record-level scoring
-  monitoring.py    # PSI drift and quality checks
-  retraining.py    # retraining decision plan
-  api.py           # FastAPI serving layer
-  spark_jobs.py    # optional Spark feature job
+├── data.py          raw demand generation and validation
+├── lake.py          bronze and silver table builders
+├── features.py      forecasting feature engineering
+├── training.py      model training and experiment output
+├── registry.py      candidate/champion promotion
+├── inference.py     batch and record-level scoring
+├── monitoring.py    PSI and quality monitoring
+├── retraining.py    retraining decision plan
+├── api.py           FastAPI serving layer
+└── spark_jobs.py    optional Spark feature job
+tests/
 ```
-
-The project is designed around the kind of lifecycle work that matters in production ML: keeping data transformations reproducible, comparing against a baseline with demand-specific metrics such as WAPE and sMAPE, promoting models only when gates pass, and monitoring whether the deployed model still behaves like the model that was validated.
