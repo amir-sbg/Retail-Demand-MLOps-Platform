@@ -190,6 +190,10 @@ def psi_from_bins(bin_edges: list[float], expected_share: list[float], observed:
         raise ValueError("at least two bins are required for PSI")
     if expected.shape[0] != edges.shape[0] - 1:
         raise ValueError("expected_share must have one value per bin")
+    if not np.all(np.isfinite(edges)) or not np.all(np.isfinite(expected)):
+        raise ValueError("PSI reference values must be finite")
+    if np.any(expected < 0) or expected.sum() <= 0:
+        raise ValueError("expected_share must be non-negative with a positive sum")
     if not np.all(np.diff(edges) > 0):
         raise ValueError("bin_edges must be strictly increasing")
 

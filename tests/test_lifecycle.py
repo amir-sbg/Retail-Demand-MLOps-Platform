@@ -151,6 +151,13 @@ def test_psi_from_bins_uses_stored_reference_shares() -> None:
     assert shifted > near
 
 
+def test_psi_from_bins_rejects_invalid_reference_shares() -> None:
+    with pytest.raises(ValueError, match="positive sum"):
+        psi_from_bins([0.0, 1.0, 2.0], [0.0, 0.0], np.array([0.5, 1.5]))
+    with pytest.raises(ValueError, match="finite"):
+        psi_from_bins([0.0, 1.0, 2.0], [np.nan, 1.0], np.array([0.5, 1.5]))
+
+
 def test_retraining_plan_requires_existing_report(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         build_retraining_plan(tmp_path / "missing.json", tmp_path / "plan.json")
