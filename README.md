@@ -23,7 +23,7 @@ The example data includes seasonality, promotions, prices, stockouts, and store/
 - local experiment tracking with optional MLflow integration
 - candidate/champion model registry and promotion gates
 - batch scoring and FastAPI serving
-- PSI drift checks, segment-level error reports, and retraining plans
+- PSI drift checks, forecast-bias alerts, segment-level error reports, and prioritized retraining plans
 - pytest coverage, Docker packaging, and GitHub Actions CI
 
 ## Setup

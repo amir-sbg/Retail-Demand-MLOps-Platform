@@ -21,7 +21,7 @@ from mlops_platform.monitoring import (
     segment_quality_report,
 )
 from mlops_platform.registry import promotion_decision, register_candidate
-from mlops_platform.retraining import build_retraining_plan
+from mlops_platform.retraining import build_retraining_plan, retraining_next_steps, retraining_priority
 from mlops_platform.training import train_forecaster
 
 
@@ -183,6 +183,41 @@ def test_psi_from_bins_rejects_invalid_reference_shares() -> None:
 def test_retraining_plan_requires_existing_report(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         build_retraining_plan(tmp_path / "missing.json", tmp_path / "plan.json")
+
+
+def test_retraining_plan_includes_priority_and_next_steps(tmp_path: Path) -> None:
+    drift_report = tmp_path / "drift.json"
+    drift_report.write_text(
+        json.dumps(
+            {
+                "retrain_recommended": True,
+                "reason": "current MAE degraded against the training reference",
+                "alerts": [
+                    {"type": "error_degradation", "severity": "high"},
+                    {"type": "forecast_bias", "severity": "medium"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan = build_retraining_plan(drift_report, tmp_path / "plan.json")
+
+    assert plan["priority"] == "high"
+    assert plan["alert_types"] == ["error_degradation", "forecast_bias"]
+    assert any("retrain" in step for step in plan["next_steps"])
+
+
+def test_retraining_helpers_map_alerts_to_actions() -> None:
+    alerts = [
+        {"type": "segment_error", "severity": "medium"},
+        {"type": "prediction_drift", "severity": "high"},
+    ]
+
+    assert retraining_priority(alerts) == "high"
+    steps = retraining_next_steps(alerts)
+    assert any("distribution" in step for step in steps)
+    assert any("segment" in step for step in steps)
 
 
 def test_monitoring_recommends_retraining_on_error_degradation(tmp_path: Path) -> None:
