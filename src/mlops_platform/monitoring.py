@@ -51,12 +51,14 @@ def monitor_predictions(
     )
     reference_mae = float(baseline.get("reference_metrics", {}).get("mae", 0.0))
     current_mae = float(quality.get("mae", 0.0)) if quality else 0.0
+    current_bias = float(quality.get("bias", 0.0)) if quality else 0.0
     alerts = monitoring_alerts(
         psi=drift["predicted_units_psi"],
         current_mae=current_mae,
         reference_mae=reference_mae,
         segments=segments,
         config=config,
+        current_bias=current_bias,
     )
     retrain = bool(alerts)
     reason = str(alerts[0]["message"]) if alerts else "no retraining trigger crossed"
@@ -81,6 +83,7 @@ def monitoring_alerts(
     reference_mae: float,
     segments: list[dict[str, float | int | str]],
     config: MonitoringConfig,
+    current_bias: float = 0.0,
 ) -> list[dict[str, float | str]]:
     alerts: list[dict[str, float | str]] = []
     if psi >= config.psi_threshold:
@@ -104,6 +107,18 @@ def monitoring_alerts(
                     "value": round(float(current_mae), 6),
                     "threshold": round(float(mae_threshold), 6),
                     "message": "current MAE degraded against the training reference",
+                }
+            )
+
+        bias_threshold = reference_mae * config.bias_alert_ratio
+        if abs(current_bias) > bias_threshold:
+            alerts.append(
+                {
+                    "type": "forecast_bias",
+                    "severity": "medium",
+                    "value": round(float(current_bias), 6),
+                    "threshold": round(float(bias_threshold), 6),
+                    "message": "forecast bias is large relative to the training error scale",
                 }
             )
 

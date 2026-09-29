@@ -226,14 +226,29 @@ def test_monitoring_alerts_include_drift_and_segment_details() -> None:
             }
         ],
         config=MonitoringConfig(psi_threshold=0.2, mae_degradation_ratio=1.5),
+        current_bias=-0.8,
     )
 
     assert [alert["type"] for alert in alerts] == [
         "prediction_drift",
         "error_degradation",
+        "forecast_bias",
         "segment_error",
     ]
     assert alerts[-1]["segment"] == "category=frozen"
+
+
+def test_monitoring_alerts_catches_directional_bias() -> None:
+    alerts = monitoring_alerts(
+        psi=0.01,
+        current_mae=1.1,
+        reference_mae=1.0,
+        segments=[],
+        config=MonitoringConfig(bias_alert_ratio=0.4),
+        current_bias=0.6,
+    )
+
+    assert [alert["type"] for alert in alerts] == ["forecast_bias"]
 
 
 def test_segment_quality_report_ranks_segments_by_error() -> None:

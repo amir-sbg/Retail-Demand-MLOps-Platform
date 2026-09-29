@@ -58,12 +58,15 @@ class MonitoringConfig:
     drift_report_path: Path = Path("reports/drift_report.json")
     psi_threshold: float = 0.20
     mae_degradation_ratio: float = 1.20
+    bias_alert_ratio: float = 0.50
 
     def validate(self) -> None:
         if self.psi_threshold <= 0:
             raise ValueError("psi_threshold must be positive")
         if self.mae_degradation_ratio <= 1.0:
             raise ValueError("mae_degradation_ratio must be greater than 1")
+        if self.bias_alert_ratio <= 0:
+            raise ValueError("bias_alert_ratio must be positive")
 
 
 @dataclass(frozen=True)
