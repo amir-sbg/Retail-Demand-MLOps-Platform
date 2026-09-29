@@ -10,7 +10,7 @@ import pytest
 from mlops_platform.config import DataConfig, MonitoringConfig, PipelineConfig, TrackingConfig, TrainingConfig
 from mlops_platform.data import write_raw_demand
 from mlops_platform.features import build_feature_table
-from mlops_platform.inference import batch_predict
+from mlops_platform.inference import batch_predict, prediction_output_summary
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import regression_metrics, time_splits
 from mlops_platform.monitoring import (
@@ -90,6 +90,28 @@ def test_end_to_end_lifecycle_runs_on_temp_paths(tmp_path: Path) -> None:
     assert len(predictions) > 0
     assert "retrain_recommended" in drift
     assert plan["status"] in {"ready_to_retrain", "no_action"}
+    batch_metrics = json.loads((tmp_path / "reports" / "batch_metrics.json").read_text(encoding="utf-8"))
+    assert batch_metrics["prediction_summary"]["rows"] == len(predictions)
+    assert batch_metrics["prediction_summary"]["has_actuals"]
+
+
+def test_prediction_output_summary_reports_serving_shape() -> None:
+    predictions = pd.DataFrame(
+        {
+            "store_id": ["s1", "s1", "s2"],
+            "sku_id": ["a", "b", "a"],
+            "predicted_units": [10.0, 20.0, 40.0],
+            "actual_units": [12.0, 18.0, 39.0],
+        }
+    )
+
+    summary = prediction_output_summary(predictions)
+
+    assert summary["rows"] == 3
+    assert summary["unique_stores"] == 2
+    assert summary["unique_skus"] == 2
+    assert summary["has_actuals"]
+    assert summary["p90_predicted_units"] == pytest.approx(36.0)
 
 
 def test_time_splits_keep_recent_rows_for_test() -> None:

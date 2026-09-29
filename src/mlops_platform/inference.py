@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from mlops_platform.features import model_matrix
@@ -38,11 +39,31 @@ def batch_predict(
             {
                 "model_version": metadata["version"],
                 "rows": len(output),
+                "prediction_summary": prediction_output_summary(output),
                 "metrics": regression_metrics(output["actual_units"], output["predicted_units"]),
             },
             metrics_path,
         )
     return output
+
+
+def prediction_output_summary(predictions: pd.DataFrame) -> dict[str, float | int | bool]:
+    if "predicted_units" not in predictions.columns:
+        raise ValueError("predictions must include predicted_units")
+    values = predictions["predicted_units"].to_numpy(dtype=float)
+    if values.size == 0 or not np.all(np.isfinite(values)):
+        raise ValueError("predicted_units must be non-empty and finite")
+
+    return {
+        "rows": int(len(predictions)),
+        "unique_stores": int(predictions["store_id"].nunique()) if "store_id" in predictions else 0,
+        "unique_skus": int(predictions["sku_id"].nunique()) if "sku_id" in predictions else 0,
+        "has_actuals": "actual_units" in predictions.columns,
+        "min_predicted_units": float(np.min(values)),
+        "p50_predicted_units": float(np.percentile(values, 50)),
+        "p90_predicted_units": float(np.percentile(values, 90)),
+        "max_predicted_units": float(np.max(values)),
+    }
 
 
 def predict_records(records: list[dict], registry_dir: Path) -> list[dict]:
