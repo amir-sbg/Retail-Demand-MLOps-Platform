@@ -84,6 +84,30 @@ def test_feature_engineering_keeps_windows_inside_each_series() -> None:
     assert b_day_28["promotion_price"] == 5.0
 
 
+def test_target_aggregates_only_use_prior_dates() -> None:
+    raw = generate_raw_demand(DataConfig(n_days=50, n_stores=1, n_skus=2, seed=9))
+    dates = pd.to_datetime(raw["date"])
+    silver = raw.assign(
+        date=dates,
+        revenue=raw["price"] * raw["units_sold"],
+        is_weekend=dates.dt.dayofweek.isin([5, 6]).astype(int),
+        day_of_week=dates.dt.dayofweek,
+        month=dates.dt.month,
+    )
+    changed = silver.copy()
+    final_date = changed["date"].max()
+    changed.loc[changed["date"] == final_date, "units_sold"] += 10_000
+
+    original_features = make_features(silver)
+    changed_features = make_features(changed)
+    columns = ["store_id", "sku_id", "date", "sku_avg_units", "store_avg_units"]
+
+    pd.testing.assert_frame_equal(
+        original_features.loc[:, columns],
+        changed_features.loc[:, columns],
+    )
+
+
 def test_model_matrix_adds_numeric_and_categorical_columns() -> None:
     raw = generate_raw_demand(DataConfig(n_days=50, n_stores=1, n_skus=2))
     silver = raw.assign(

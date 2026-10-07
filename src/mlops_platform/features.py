@@ -97,8 +97,23 @@ def make_features(silver: pd.DataFrame) -> pd.DataFrame:
     frame["rolling_mean_delta_7_28"] = (
         frame["rolling_7_mean_units"] - frame["rolling_28_mean_units"]
     )
-    frame["sku_avg_units"] = group.transform("mean")
-    frame["store_avg_units"] = frame.groupby("store_id")["units_sold"].transform("mean")
+    frame["sku_avg_units"] = group.transform(
+        lambda values: values.shift(1).expanding(min_periods=3).mean()
+    )
+    store_daily = (
+        frame.groupby(["store_id", "date"], as_index=False)["units_sold"]
+        .mean()
+        .sort_values(["store_id", "date"])
+    )
+    store_daily["store_avg_units"] = store_daily.groupby("store_id")["units_sold"].transform(
+        lambda values: values.shift(1).expanding(min_periods=3).mean()
+    )
+    frame = frame.merge(
+        store_daily[["store_id", "date", "store_avg_units"]],
+        on=["store_id", "date"],
+        how="left",
+        validate="many_to_one",
+    )
     frame["entity_id"] = frame["store_id"] + "::" + frame["sku_id"]
 
     feature_frame = frame.dropna(subset=FEATURE_COLUMNS + ("units_sold",)).reset_index(drop=True)
