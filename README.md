@@ -19,11 +19,11 @@ The example data includes seasonality, promotions, prices, stockouts, and store/
 
 - deterministic synthetic demand generation and validation
 - bronze, silver, and gold table builders, with an optional Spark/Delta path
-- time-based train/validation/test splitting to avoid future leakage
+- leakage-safe historical aggregates, time splits, and rolling-origin backtests
 - local experiment tracking with optional MLflow integration
-- candidate/champion model registry and promotion gates
+- conformal forecast intervals and candidate/champion regression gates
 - batch scoring and FastAPI serving
-- PSI drift checks, forecast-bias alerts, segment-level error reports, and prioritized retraining plans
+- prediction/feature drift checks, bias alerts, segment errors, and prioritized retraining plans
 - pytest coverage, Docker packaging, and GitHub Actions CI
 
 ## Setup

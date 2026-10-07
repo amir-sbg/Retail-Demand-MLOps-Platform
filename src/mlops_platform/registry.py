@@ -25,7 +25,12 @@ def register_candidate(result: TrainingResult, config: PipelineConfig) -> Regist
     model_path = version_dir / "model.joblib"
     shutil.copy2(result.model_path, model_path)
 
-    should_promote, reason = promotion_decision(result.metrics, config)
+    champion_metrics = _load_champion_validation_metrics(registry_dir)
+    should_promote, reason = promotion_decision(
+        result.metrics,
+        config,
+        champion_metrics=champion_metrics,
+    )
     metadata = {
         "version": result.run_id,
         "stage": "champion" if should_promote else "candidate",
@@ -64,14 +69,32 @@ def load_champion(registry_dir: Path) -> tuple[object, dict]:
     return joblib.load(model_path), json.loads(metadata_path.read_text(encoding="utf-8"))
 
 
-def promotion_decision(metrics: dict, config: PipelineConfig) -> tuple[bool, str]:
+def promotion_decision(
+    metrics: dict,
+    config: PipelineConfig,
+    champion_metrics: dict | None = None,
+) -> tuple[bool, str]:
     validation = metrics["validation"]
     baseline = metrics["baseline_validation"]
     if validation["r2"] < config.training.min_validation_r2:
         return False, "validation r2 is below the minimum gate"
     if validation["mae"] > baseline["mae"] * config.training.max_champion_mae_ratio:
         return False, "candidate does not improve enough over the rolling baseline"
+    if champion_metrics is not None:
+        champion_mae = float(champion_metrics.get("mae", float("inf")))
+        allowed_mae = champion_mae * config.training.max_champion_regression_ratio
+        if validation["mae"] > allowed_mae:
+            return False, "candidate regresses beyond the allowed champion MAE tolerance"
     return True, "candidate passed validation quality gates"
+
+
+def _load_champion_validation_metrics(registry_dir: Path) -> dict | None:
+    metadata_path = registry_dir / "champion" / "metadata.json"
+    if not metadata_path.exists():
+        return None
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metrics = payload.get("metrics", {}).get("validation")
+    return metrics if isinstance(metrics, dict) else None
 
 
 def _write_registry_index(registry_dir: Path, champion_version: str, metadata: dict) -> None:

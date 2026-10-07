@@ -193,6 +193,23 @@ def test_promotion_decision_applies_quality_gates() -> None:
     assert "passed" in reason
 
 
+def test_promotion_decision_blocks_champion_regression() -> None:
+    config = _tmp_config(Path("/tmp/mlops-test"))
+    metrics = {
+        "validation": {"r2": 0.8, "mae": 2.0},
+        "baseline_validation": {"mae": 4.0},
+    }
+
+    promoted, reason = promotion_decision(
+        metrics,
+        config,
+        champion_metrics={"mae": 1.5},
+    )
+
+    assert not promoted
+    assert "champion" in reason
+
+
 def test_psi_increases_for_shifted_distribution() -> None:
     near = psi_from_stats(10.0, 1.0, np.linspace(8.5, 11.5, 100))
     shifted = psi_from_stats(10.0, 1.0, np.linspace(15.0, 18.0, 100))

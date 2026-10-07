@@ -30,6 +30,7 @@ class TrainingConfig:
     random_state: int = 42
     min_validation_r2: float = 0.35
     max_champion_mae_ratio: float = 1.05
+    max_champion_regression_ratio: float = 1.02
 
     def validate(self) -> None:
         if self.validation_days < 7 or self.test_days < 7:
@@ -38,6 +39,8 @@ class TrainingConfig:
             raise ValueError("min_validation_r2 is too low to be useful")
         if self.max_champion_mae_ratio <= 0:
             raise ValueError("max_champion_mae_ratio must be positive")
+        if self.max_champion_regression_ratio < 1.0:
+            raise ValueError("max_champion_regression_ratio must be at least 1")
 
 
 @dataclass(frozen=True)
