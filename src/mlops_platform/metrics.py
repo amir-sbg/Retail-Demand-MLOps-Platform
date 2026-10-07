@@ -31,6 +31,35 @@ def time_splits(
     return train.reset_index(drop=True), validation.reset_index(drop=True), test.reset_index(drop=True)
 
 
+def rolling_origin_splits(
+    frame: pd.DataFrame,
+    horizon_days: int,
+    folds: int = 3,
+) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
+    """Build expanding-window folds ordered from oldest to newest."""
+
+    if horizon_days < 1 or folds < 1:
+        raise ValueError("horizon_days and folds must be positive")
+    if "date" not in frame.columns:
+        raise ValueError("feature table must include a date column")
+    data = frame.copy()
+    data["date"] = pd.to_datetime(data["date"], errors="raise")
+    dates = np.sort(data["date"].dt.normalize().unique())
+    if len(dates) <= horizon_days * folds:
+        raise ValueError("not enough dates for the requested rolling-origin folds")
+
+    windows = []
+    for fold in range(folds):
+        validation_end = len(dates) - horizon_days * (folds - fold - 1)
+        validation_start = validation_end - horizon_days
+        train_dates = dates[:validation_start]
+        validation_dates = dates[validation_start:validation_end]
+        train = data[data["date"].dt.normalize().isin(train_dates)].reset_index(drop=True)
+        validation = data[data["date"].dt.normalize().isin(validation_dates)].reset_index(drop=True)
+        windows.append((train, validation))
+    return windows
+
+
 def regression_metrics(y_true, y_pred) -> dict[str, float]:
     actual, predicted = _matching_arrays(y_true, y_pred)
     residuals = predicted - actual

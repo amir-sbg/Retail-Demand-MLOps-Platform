@@ -12,7 +12,12 @@ from mlops_platform.data import write_raw_demand
 from mlops_platform.features import build_feature_table
 from mlops_platform.inference import batch_predict, prediction_output_summary
 from mlops_platform.lake import build_bronze_table, build_silver_table
-from mlops_platform.metrics import regression_metrics, split_conformal_summary, time_splits
+from mlops_platform.metrics import (
+    regression_metrics,
+    rolling_origin_splits,
+    split_conformal_summary,
+    time_splits,
+)
 from mlops_platform.monitoring import (
     feature_mean_shift_report,
     monitor_predictions,
@@ -128,6 +133,21 @@ def test_time_splits_keep_recent_rows_for_test() -> None:
     assert train["date"].max() < validation["date"].min()
     assert validation["date"].max() < test["date"].min()
     assert len(test) == 5
+
+
+def test_rolling_origin_splits_expand_training_window() -> None:
+    frame = pd.DataFrame(
+        {
+            "date": pd.date_range("2025-01-01", periods=40),
+            "value": np.arange(40),
+        }
+    )
+
+    windows = rolling_origin_splits(frame, horizon_days=5, folds=3)
+
+    assert [len(train) for train, _ in windows] == [25, 30, 35]
+    assert all(len(validation) == 5 for _, validation in windows)
+    assert all(train["date"].max() < validation["date"].min() for train, validation in windows)
 
 
 def test_regression_metrics_reject_bad_arrays() -> None:

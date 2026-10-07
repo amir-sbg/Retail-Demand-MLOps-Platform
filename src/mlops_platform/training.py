@@ -14,6 +14,7 @@ from mlops_platform.metrics import (
     naive_forecast,
     regression_metrics,
     residual_summary,
+    rolling_origin_splits,
     save_json,
     split_conformal_summary,
     time_splits,
@@ -44,13 +45,7 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
     y_validation = validation[config.training.target_column].to_numpy(dtype=float)
     y_test = test[config.training.target_column].to_numpy(dtype=float)
 
-    model = HistGradientBoostingRegressor(
-        max_iter=220,
-        learning_rate=0.055,
-        l2_regularization=0.04,
-        max_leaf_nodes=31,
-        random_state=config.training.random_state,
-    )
+    model = _new_model(config.training.random_state)
 
     tracker = ExperimentTracker(config.tracking)
     run = tracker.start_run(config.to_dict())
@@ -82,6 +77,10 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
             validation_predictions,
             y_test,
             test_predictions,
+        ),
+        "rolling_origin": rolling_origin_backtest(
+            pd.concat([train, validation], ignore_index=True),
+            config,
         ),
     }
     metrics["validation"]["mae_vs_baseline"] = (
@@ -132,6 +131,63 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
         metrics=metrics,
         feature_columns=matrices.feature_columns,
     )
+
+
+def _new_model(random_state: int) -> HistGradientBoostingRegressor:
+    return HistGradientBoostingRegressor(
+        max_iter=220,
+        learning_rate=0.055,
+        l2_regularization=0.04,
+        max_leaf_nodes=31,
+        random_state=random_state,
+    )
+
+
+def rolling_origin_backtest(
+    frame: pd.DataFrame,
+    config: PipelineConfig,
+    folds: int = 3,
+) -> dict[str, object]:
+    windows = rolling_origin_splits(
+        frame,
+        horizon_days=config.training.validation_days,
+        folds=folds,
+    )
+    rows = []
+    for fold, (train, validation) in enumerate(windows, start=1):
+        combined = pd.concat(
+            [train.assign(_split="train"), validation.assign(_split="validation")],
+            ignore_index=True,
+        )
+        matrix, _ = model_matrix(combined)
+        split = combined["_split"]
+        model = _new_model(config.training.random_state + fold)
+        model.fit(
+            matrix[split == "train"],
+            train[config.training.target_column].to_numpy(dtype=float),
+        )
+        predictions = model.predict(matrix[split == "validation"])
+        metrics = regression_metrics(
+            validation[config.training.target_column].to_numpy(dtype=float),
+            predictions,
+        )
+        rows.append(
+            {
+                "fold": fold,
+                "train_end": train["date"].max().date().isoformat(),
+                "validation_start": validation["date"].min().date().isoformat(),
+                "validation_end": validation["date"].max().date().isoformat(),
+                "train_rows": int(len(train)),
+                "validation_rows": int(len(validation)),
+                **metrics,
+            }
+        )
+    return {
+        "folds": rows,
+        "mean_mae": float(np.mean([row["mae"] for row in rows])),
+        "mean_wape": float(np.mean([row["wape"] for row in rows])),
+        "mae_std": float(np.std([row["mae"] for row in rows])),
+    }
 
 
 @dataclass(frozen=True)
