@@ -46,6 +46,8 @@ def retraining_next_steps(alerts: list[dict]) -> list[str]:
     steps = []
     if "prediction_drift" in alert_types:
         steps.append("refresh the recent scoring window and compare demand distribution against training")
+    if "feature_drift" in alert_types:
+        steps.append("inspect shifted input features and verify upstream data contracts")
     if "error_degradation" in alert_types:
         steps.append("retrain the candidate model and compare it against the current champion gate")
     if "forecast_bias" in alert_types:

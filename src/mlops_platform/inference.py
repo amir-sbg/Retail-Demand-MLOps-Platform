@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from mlops_platform.features import model_matrix
+from mlops_platform.features import FEATURE_COLUMNS, model_matrix
 from mlops_platform.metrics import regression_metrics, save_json
 from mlops_platform.registry import load_champion
 
@@ -24,6 +24,8 @@ def batch_predict(
     predictions = bundle["model"].predict(matrix)
 
     output = frame[["date", "store_id", "sku_id", "category"]].copy()
+    for column in FEATURE_COLUMNS:
+        output[column] = frame[column].to_numpy()
     output["model_version"] = metadata["version"]
     output["prediction_timestamp"] = datetime.now(timezone.utc).isoformat()
     output["predicted_units"] = predictions.clip(min=0)

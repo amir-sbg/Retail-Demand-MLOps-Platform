@@ -14,6 +14,7 @@ from mlops_platform.inference import batch_predict, prediction_output_summary
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import regression_metrics, split_conformal_summary, time_splits
 from mlops_platform.monitoring import (
+    feature_mean_shift_report,
     monitor_predictions,
     monitoring_alerts,
     psi_from_bins,
@@ -297,6 +298,24 @@ def test_monitoring_alerts_catches_directional_bias() -> None:
     )
 
     assert [alert["type"] for alert in alerts] == ["forecast_bias"]
+
+
+def test_feature_mean_shift_report_ranks_changed_inputs() -> None:
+    reference = {
+        "price": {"mean": 10.0, "std": 2.0},
+        "promotion": {"mean": 0.2, "std": 0.4},
+    }
+    observed = pd.DataFrame(
+        {
+            "price": [20.0, 22.0],
+            "promotion": [0.0, 1.0],
+        }
+    )
+
+    rows = feature_mean_shift_report(reference, observed)
+
+    assert rows[0]["feature"] == "price"
+    assert rows[0]["standardized_shift"] == pytest.approx(5.5)
 
 
 def test_segment_quality_report_ranks_segments_by_error() -> None:

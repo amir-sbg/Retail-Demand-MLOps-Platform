@@ -43,6 +43,10 @@ def monitor_predictions(
             predictions["predicted_units"].to_numpy(dtype=float),
         )
     }
+    feature_drift = feature_mean_shift_report(
+        baseline.get("features", {}),
+        predictions,
+    )
     quality = current.get("quality", {})
     segments = segment_quality_report(
         predictions,
@@ -59,6 +63,11 @@ def monitor_predictions(
         segments=segments,
         config=config,
         current_bias=current_bias,
+        max_feature_shift=(
+            float(feature_drift[0]["absolute_standardized_shift"])
+            if feature_drift
+            else 0.0
+        ),
     )
     retrain = bool(alerts)
     reason = str(alerts[0]["message"]) if alerts else "no retraining trigger crossed"
@@ -66,6 +75,7 @@ def monitor_predictions(
     report = {
         "rows": current["rows"],
         "drift": drift,
+        "feature_drift": feature_drift,
         "quality": quality,
         "segments": segments,
         "alerts": alerts,
@@ -84,6 +94,7 @@ def monitoring_alerts(
     segments: list[dict[str, float | int | str]],
     config: MonitoringConfig,
     current_bias: float = 0.0,
+    max_feature_shift: float = 0.0,
 ) -> list[dict[str, float | str]]:
     alerts: list[dict[str, float | str]] = []
     if psi >= config.psi_threshold:
@@ -94,6 +105,16 @@ def monitoring_alerts(
                 "value": round(float(psi), 6),
                 "threshold": config.psi_threshold,
                 "message": "prediction PSI exceeded the monitoring threshold",
+            }
+        )
+    if max_feature_shift >= config.feature_mean_shift_threshold:
+        alerts.append(
+            {
+                "type": "feature_drift",
+                "severity": "high",
+                "value": round(float(max_feature_shift), 6),
+                "threshold": config.feature_mean_shift_threshold,
+                "message": "feature mean shift exceeded the monitoring threshold",
             }
         )
 
@@ -138,6 +159,36 @@ def monitoring_alerts(
                     }
                 )
     return alerts
+
+
+def feature_mean_shift_report(
+    reference_features: dict,
+    observed: pd.DataFrame,
+) -> list[dict[str, float | str]]:
+    """Rank available numeric features by standardized mean movement."""
+
+    rows = []
+    for feature, reference in reference_features.items():
+        if feature not in observed.columns:
+            continue
+        values = pd.to_numeric(observed[feature], errors="coerce").to_numpy(dtype=float)
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            continue
+        reference_mean = float(reference["mean"])
+        reference_std = max(abs(float(reference["std"])), 1e-6)
+        shift = (float(np.mean(values)) - reference_mean) / reference_std
+        rows.append(
+            {
+                "feature": feature,
+                "observed_mean": float(np.mean(values)),
+                "reference_mean": reference_mean,
+                "standardized_shift": shift,
+                "absolute_standardized_shift": abs(shift),
+            }
+        )
+    rows.sort(key=lambda row: float(row["absolute_standardized_shift"]), reverse=True)
+    return rows
 
 
 def segment_quality_report(

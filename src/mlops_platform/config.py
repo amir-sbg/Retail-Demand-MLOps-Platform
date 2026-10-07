@@ -59,6 +59,7 @@ class MonitoringConfig:
     psi_threshold: float = 0.20
     mae_degradation_ratio: float = 1.20
     bias_alert_ratio: float = 0.50
+    feature_mean_shift_threshold: float = 2.0
 
     def validate(self) -> None:
         if self.psi_threshold <= 0:
@@ -67,6 +68,8 @@ class MonitoringConfig:
             raise ValueError("mae_degradation_ratio must be greater than 1")
         if self.bias_alert_ratio <= 0:
             raise ValueError("bias_alert_ratio must be positive")
+        if self.feature_mean_shift_threshold <= 0:
+            raise ValueError("feature_mean_shift_threshold must be positive")
 
 
 @dataclass(frozen=True)
