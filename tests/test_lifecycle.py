@@ -12,7 +12,7 @@ from mlops_platform.data import write_raw_demand
 from mlops_platform.features import build_feature_table
 from mlops_platform.inference import batch_predict, prediction_output_summary
 from mlops_platform.lake import build_bronze_table, build_silver_table
-from mlops_platform.metrics import regression_metrics, time_splits
+from mlops_platform.metrics import regression_metrics, split_conformal_summary, time_splits
 from mlops_platform.monitoring import (
     monitor_predictions,
     monitoring_alerts,
@@ -144,6 +144,19 @@ def test_regression_metrics_include_demand_forecast_diagnostics() -> None:
     assert metrics["smape"] > 0.0
     assert metrics["under_forecast_rate"] == pytest.approx(1 / 3)
     assert metrics["over_forecast_rate"] == pytest.approx(2 / 3)
+
+
+def test_split_conformal_interval_uses_validation_errors() -> None:
+    report = split_conformal_summary(
+        [10.0, 20.0, 30.0, 40.0],
+        [10.0, 21.0, 32.0, 44.0],
+        [15.0, 25.0, 35.0],
+        [16.0, 28.0, 40.0],
+        coverage=0.75,
+    )
+
+    assert report["interval_radius"] == 4.0
+    assert report["observed_coverage"] == pytest.approx(2 / 3)
 
 
 def test_promotion_decision_applies_quality_gates() -> None:

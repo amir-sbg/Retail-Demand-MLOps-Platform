@@ -68,6 +68,42 @@ def residual_summary(y_true, y_pred) -> dict[str, float]:
     }
 
 
+def split_conformal_summary(
+    validation_actual,
+    validation_predicted,
+    test_actual,
+    test_predicted,
+    coverage: float = 0.90,
+) -> dict[str, float | int]:
+    """Calibrate a symmetric forecast interval on validation residuals."""
+
+    if not 0.0 < coverage < 1.0:
+        raise ValueError("coverage must be between zero and one")
+    calibration_y, calibration_prediction = _matching_arrays(
+        validation_actual,
+        validation_predicted,
+    )
+    evaluation_y, evaluation_prediction = _matching_arrays(test_actual, test_predicted)
+    calibration_errors = np.abs(calibration_prediction - calibration_y)
+    level = min(
+        1.0,
+        np.ceil((len(calibration_errors) + 1) * coverage) / len(calibration_errors),
+    )
+    try:
+        radius = float(np.quantile(calibration_errors, level, method="higher"))
+    except TypeError:
+        radius = float(np.quantile(calibration_errors, level, interpolation="higher"))
+    covered = np.abs(evaluation_prediction - evaluation_y) <= radius
+    return {
+        "target_coverage": coverage,
+        "observed_coverage": float(np.mean(covered)),
+        "interval_radius": radius,
+        "mean_interval_width": 2.0 * radius,
+        "calibration_rows": int(len(calibration_errors)),
+        "test_rows": int(len(evaluation_y)),
+    }
+
+
 def naive_forecast(frame: pd.DataFrame) -> np.ndarray:
     if "rolling_7_mean_units" not in frame.columns:
         raise ValueError("feature table must include rolling_7_mean_units")

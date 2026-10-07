@@ -15,6 +15,7 @@ from mlops_platform.metrics import (
     regression_metrics,
     residual_summary,
     save_json,
+    split_conformal_summary,
     time_splits,
 )
 from mlops_platform.tracking import ExperimentTracker
@@ -76,6 +77,12 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
         "baseline_validation": regression_metrics(y_validation, baseline_validation),
         "baseline_test": regression_metrics(y_test, baseline_test),
         "residuals": residual_summary(y_test, test_predictions),
+        "prediction_interval": split_conformal_summary(
+            y_validation,
+            validation_predictions,
+            y_test,
+            test_predictions,
+        ),
     }
     metrics["validation"]["mae_vs_baseline"] = (
         metrics["validation"]["mae"] / metrics["baseline_validation"]["mae"]
@@ -91,7 +98,12 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
         model_path,
     )
     save_json(metrics, run.run_dir / "metrics.json")
-    _write_predictions(test, test_predictions, run.run_dir / "test_predictions.csv")
+    _write_predictions(
+        test,
+        test_predictions,
+        run.run_dir / "test_predictions.csv",
+        interval_radius=metrics["prediction_interval"]["interval_radius"],
+    )
     model_card_path = _write_model_card(
         run.run_dir / "model_card.md",
         train,
@@ -153,10 +165,18 @@ def _split_model_matrices(
     )
 
 
-def _write_predictions(test: pd.DataFrame, predictions, path: Path) -> None:
+def _write_predictions(
+    test: pd.DataFrame,
+    predictions,
+    path: Path,
+    interval_radius: float | None = None,
+) -> None:
     output = test[["date", "store_id", "sku_id", "units_sold"]].copy()
     output["prediction"] = predictions
     output["absolute_error"] = (output["prediction"] - output["units_sold"]).abs()
+    if interval_radius is not None:
+        output["prediction_lower"] = (output["prediction"] - interval_radius).clip(lower=0)
+        output["prediction_upper"] = output["prediction"] + interval_radius
     path.parent.mkdir(parents=True, exist_ok=True)
     output.to_csv(path, index=False)
 
