@@ -26,7 +26,7 @@ from mlops_platform.monitoring import (
     psi_from_stats,
     segment_quality_report,
 )
-from mlops_platform.registry import promotion_decision, register_candidate
+from mlops_platform.registry import promotion_decision, promotion_scorecard, register_candidate
 from mlops_platform.retraining import build_retraining_plan, retraining_next_steps, retraining_priority
 from mlops_platform.training import train_forecaster
 
@@ -214,6 +214,20 @@ def test_promotion_decision_blocks_champion_regression() -> None:
 
     assert not promoted
     assert "champion" in reason
+
+
+def test_promotion_scorecard_exposes_baseline_and_champion_deltas() -> None:
+    config = _tmp_config(Path("/tmp/mlops-test"))
+    metrics = {
+        "validation": {"r2": 0.8, "mae": 2.0},
+        "baseline_validation": {"mae": 4.0},
+    }
+
+    report = promotion_scorecard(metrics, config, champion_metrics={"mae": 1.5})
+
+    assert report["mae_improvement_vs_baseline"] == 2.0
+    assert report["mae_ratio_vs_baseline"] == 0.5
+    assert report["mae_delta_vs_champion"] == 0.5
 
 
 def test_psi_increases_for_shifted_distribution() -> None:

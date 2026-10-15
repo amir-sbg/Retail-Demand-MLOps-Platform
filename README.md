@@ -23,6 +23,7 @@ The example data includes seasonality, promotions, prices, stockouts, and store/
 - local experiment tracking with optional MLflow integration
 - conformal forecast intervals with directional misses and interval scores
 - candidate/champion regression gates
+- promotion scorecards with baseline and incumbent deltas
 - batch scoring and FastAPI serving
 - prediction/feature drift checks, bias alerts, segment errors, and prioritized retraining plans
 - pytest coverage, Docker packaging, and GitHub Actions CI

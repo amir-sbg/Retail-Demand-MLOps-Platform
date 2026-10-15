@@ -39,6 +39,9 @@ def register_candidate(result: TrainingResult, config: PipelineConfig) -> Regist
         "metrics": result.metrics,
         "feature_columns": result.feature_columns,
         "promotion_reason": reason,
+        "promotion_scorecard": promotion_scorecard(
+            result.metrics, config, champion_metrics=champion_metrics
+        ),
     }
     metadata_path = version_dir / "metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n")
@@ -86,6 +89,34 @@ def promotion_decision(
         if validation["mae"] > allowed_mae:
             return False, "candidate regresses beyond the allowed champion MAE tolerance"
     return True, "candidate passed validation quality gates"
+
+
+def promotion_scorecard(
+    metrics: dict,
+    config: PipelineConfig,
+    champion_metrics: dict | None = None,
+) -> dict[str, float | None]:
+    validation = metrics["validation"]
+    baseline = metrics["baseline_validation"]
+    candidate_mae = float(validation["mae"])
+    baseline_mae = float(baseline["mae"])
+    champion_mae = (
+        float(champion_metrics["mae"])
+        if champion_metrics is not None and "mae" in champion_metrics
+        else None
+    )
+    return {
+        "candidate_mae": candidate_mae,
+        "candidate_r2": float(validation["r2"]),
+        "baseline_mae": baseline_mae,
+        "mae_improvement_vs_baseline": baseline_mae - candidate_mae,
+        "mae_ratio_vs_baseline": candidate_mae / baseline_mae if baseline_mae > 0 else None,
+        "minimum_validation_r2": config.training.min_validation_r2,
+        "champion_mae": champion_mae,
+        "mae_delta_vs_champion": (
+            candidate_mae - champion_mae if champion_mae is not None else None
+        ),
+    }
 
 
 def _load_champion_validation_metrics(registry_dir: Path) -> dict | None:
