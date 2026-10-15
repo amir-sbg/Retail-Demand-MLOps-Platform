@@ -63,6 +63,7 @@ def rolling_origin_splits(
 def regression_metrics(y_true, y_pred) -> dict[str, float]:
     actual, predicted = _matching_arrays(y_true, y_pred)
     residuals = predicted - actual
+    absolute_errors = np.abs(residuals)
     mse = float(np.mean(residuals**2))
     mae = float(np.mean(np.abs(residuals)))
     denominator = np.maximum(np.abs(actual), 1.0)
@@ -74,6 +75,8 @@ def regression_metrics(y_true, y_pred) -> dict[str, float]:
         r2 = 1.0 - float(np.sum(residuals**2) / ss_total)
     return {
         "mae": mae,
+        "median_absolute_error": float(np.median(absolute_errors)),
+        "p90_absolute_error": float(np.quantile(absolute_errors, 0.90)),
         "rmse": float(np.sqrt(mse)),
         "mape": float(np.mean(np.abs(residuals) / denominator)),
         "wape": float(np.sum(np.abs(residuals)) / demand_total) if demand_total > 0 else 0.0,
@@ -82,6 +85,13 @@ def regression_metrics(y_true, y_pred) -> dict[str, float]:
         "bias": float(np.mean(residuals)),
         "under_forecast_rate": float(np.mean(predicted < actual)),
         "over_forecast_rate": float(np.mean(predicted > actual)),
+        "rmsle": float(
+            np.sqrt(
+                np.mean(
+                    (np.log1p(np.maximum(predicted, 0.0)) - np.log1p(np.maximum(actual, 0.0))) ** 2
+                )
+            )
+        ),
     }
 
 

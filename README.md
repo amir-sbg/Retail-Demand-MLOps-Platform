@@ -13,7 +13,7 @@ raw demand data
   -> retraining plan
 ```
 
-The example data includes seasonality, promotions, prices, stockouts, and store/SKU effects. A gradient-boosted regressor is compared with a simple baseline using forecasting metrics such as WAPE and sMAPE. The modeling problem stays small so the data and deployment workflow are easy to follow.
+The example data includes seasonality, promotions, prices, stockouts, and store/SKU effects. A gradient-boosted regressor is compared with a simple baseline using WAPE, sMAPE, RMSLE, and median/tail absolute error. The modeling problem stays small so the data and deployment workflow are easy to follow.
 
 ## Included
 

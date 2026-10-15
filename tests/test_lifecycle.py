@@ -165,6 +165,9 @@ def test_regression_metrics_include_demand_forecast_diagnostics() -> None:
     assert metrics["smape"] > 0.0
     assert metrics["under_forecast_rate"] == pytest.approx(1 / 3)
     assert metrics["over_forecast_rate"] == pytest.approx(2 / 3)
+    assert metrics["median_absolute_error"] == 3.0
+    assert metrics["p90_absolute_error"] >= metrics["median_absolute_error"]
+    assert metrics["rmsle"] > 0.0
 
 
 def test_split_conformal_interval_uses_validation_errors() -> None:
