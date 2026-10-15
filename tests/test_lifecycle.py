@@ -181,6 +181,9 @@ def test_split_conformal_interval_uses_validation_errors() -> None:
 
     assert report["interval_radius"] == 4.0
     assert report["observed_coverage"] == pytest.approx(2 / 3)
+    assert report["below_interval_rate"] == pytest.approx(1 / 3)
+    assert report["above_interval_rate"] == 0.0
+    assert report["mean_interval_score"] > report["mean_interval_width"]
 
 
 def test_promotion_decision_applies_quality_gates() -> None:

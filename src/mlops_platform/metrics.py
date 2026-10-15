@@ -132,12 +132,25 @@ def split_conformal_summary(
         radius = float(np.quantile(calibration_errors, level, method="higher"))
     except TypeError:
         radius = float(np.quantile(calibration_errors, level, interpolation="higher"))
-    covered = np.abs(evaluation_prediction - evaluation_y) <= radius
+    lower = evaluation_prediction - radius
+    upper = evaluation_prediction + radius
+    covered = (evaluation_y >= lower) & (evaluation_y <= upper)
+    below = evaluation_y < lower
+    above = evaluation_y > upper
+    alpha = 1.0 - coverage
+    interval_score = (
+        2.0 * radius
+        + (2.0 / alpha) * (lower - evaluation_y) * below
+        + (2.0 / alpha) * (evaluation_y - upper) * above
+    )
     return {
         "target_coverage": coverage,
         "observed_coverage": float(np.mean(covered)),
         "interval_radius": radius,
         "mean_interval_width": 2.0 * radius,
+        "below_interval_rate": float(np.mean(below)),
+        "above_interval_rate": float(np.mean(above)),
+        "mean_interval_score": float(np.mean(interval_score)),
         "calibration_rows": int(len(calibration_errors)),
         "test_rows": int(len(evaluation_y)),
     }
