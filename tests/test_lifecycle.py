@@ -94,6 +94,13 @@ def test_end_to_end_lifecycle_runs_on_temp_paths(tmp_path: Path) -> None:
     assert "HistGradientBoostingRegressor" in model_card.read_text(encoding="utf-8")
     assert (config.tracking.registry_dir / "champion" / "model.joblib").exists()
     assert len(predictions) > 0
+    assert {
+        "prediction_lower",
+        "prediction_upper",
+        "prediction_interval_coverage",
+    }.issubset(predictions.columns)
+    assert (predictions["prediction_lower"] <= predictions["predicted_units"]).all()
+    assert (predictions["prediction_upper"] >= predictions["predicted_units"]).all()
     assert "retrain_recommended" in drift
     assert plan["status"] in {"ready_to_retrain", "no_action"}
     batch_metrics = json.loads((tmp_path / "reports" / "batch_metrics.json").read_text(encoding="utf-8"))

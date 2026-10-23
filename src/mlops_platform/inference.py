@@ -29,6 +29,7 @@ def batch_predict(
     output["model_version"] = metadata["version"]
     output["prediction_timestamp"] = datetime.now(timezone.utc).isoformat()
     output["predicted_units"] = predictions.clip(min=0)
+    _add_prediction_intervals(output, bundle)
     if bundle["target_column"] in frame.columns:
         output["actual_units"] = frame[bundle["target_column"]].to_numpy(dtype=float)
         output["absolute_error"] = (output["predicted_units"] - output["actual_units"]).abs()
@@ -76,13 +77,36 @@ def predict_records(records: list[dict], registry_dir: Path) -> list[dict]:
     matrix, _ = model_matrix(frame)
     matrix = _align_columns(matrix, bundle["feature_columns"])
     predictions = bundle["model"].predict(matrix).clip(min=0)
-    return [
+    rows = [
         {
             "model_version": metadata["version"],
             "predicted_units": float(prediction),
         }
         for prediction in predictions
     ]
+    interval = bundle.get("prediction_interval")
+    if interval is not None:
+        radius = float(interval["radius"])
+        coverage = float(interval["coverage"])
+        for row in rows:
+            prediction = float(row["predicted_units"])
+            row["prediction_lower"] = max(0.0, prediction - radius)
+            row["prediction_upper"] = prediction + radius
+            row["prediction_interval_coverage"] = coverage
+    return rows
+
+
+def _add_prediction_intervals(output: pd.DataFrame, bundle: dict) -> None:
+    interval = bundle.get("prediction_interval")
+    if interval is None:
+        return
+    radius = float(interval["radius"])
+    coverage = float(interval["coverage"])
+    if radius < 0 or not 0.0 < coverage < 1.0:
+        raise ValueError("stored prediction interval calibration is invalid")
+    output["prediction_lower"] = (output["predicted_units"] - radius).clip(lower=0)
+    output["prediction_upper"] = output["predicted_units"] + radius
+    output["prediction_interval_coverage"] = coverage
 
 
 def _align_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:

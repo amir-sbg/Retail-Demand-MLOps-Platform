@@ -93,6 +93,11 @@ def train_forecaster(config: PipelineConfig) -> TrainingResult:
             "model": model,
             "feature_columns": matrices.feature_columns,
             "target_column": config.training.target_column,
+            "prediction_interval": {
+                "method": "split_conformal",
+                "coverage": metrics["prediction_interval"]["target_coverage"],
+                "radius": metrics["prediction_interval"]["interval_radius"],
+            },
         },
         model_path,
     )
