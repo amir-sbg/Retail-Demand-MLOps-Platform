@@ -22,6 +22,7 @@ from mlops_platform.monitoring import (
     feature_mean_shift_report,
     monitor_predictions,
     monitoring_alerts,
+    prediction_interval_report,
     psi_from_bins,
     psi_from_stats,
     segment_quality_report,
@@ -396,3 +397,33 @@ def test_segment_quality_report_ranks_segments_by_error() -> None:
 
     assert rows[0]["segment"] == "store_id=s2"
     assert rows[0]["mae"] > rows[1]["mae"]
+
+
+def test_prediction_interval_report_tracks_miss_direction() -> None:
+    predictions = pd.DataFrame(
+        {
+            "actual_units": [8.0, 12.0, 20.0, 30.0],
+            "prediction_lower": [9.0, 10.0, 17.0, 24.0],
+            "prediction_upper": [11.0, 14.0, 22.0, 28.0],
+        }
+    )
+
+    report = prediction_interval_report(predictions)
+
+    assert report["observed_coverage"] == pytest.approx(0.5)
+    assert report["below_interval_rate"] == pytest.approx(0.25)
+    assert report["above_interval_rate"] == pytest.approx(0.25)
+
+
+def test_monitoring_alerts_on_interval_undercoverage() -> None:
+    alerts = monitoring_alerts(
+        psi=0.01,
+        current_mae=1.0,
+        reference_mae=1.0,
+        segments=[],
+        config=MonitoringConfig(interval_coverage_ratio=0.9),
+        interval_coverage=0.70,
+        target_interval_coverage=0.90,
+    )
+
+    assert [alert["type"] for alert in alerts] == ["interval_undercoverage"]

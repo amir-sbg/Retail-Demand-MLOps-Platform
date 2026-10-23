@@ -54,4 +54,6 @@ def retraining_next_steps(alerts: list[dict]) -> list[str]:
         steps.append("inspect systematic over/under-forecasting before promotion")
     if "segment_error" in alert_types:
         steps.append("review the worst store/category segments and add segment-specific diagnostics")
+    if "interval_undercoverage" in alert_types:
+        steps.append("recalibrate forecast intervals on a recent labeled validation window")
     return steps or ["review the drift report before starting a retraining run"]

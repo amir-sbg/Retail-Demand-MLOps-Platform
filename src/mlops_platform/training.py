@@ -315,6 +315,11 @@ def _write_training_profile(
             for column in x_train.columns
         },
         "reference_metrics": metrics["test"],
+        "prediction_interval": {
+            "target_coverage": metrics["prediction_interval"]["target_coverage"],
+            "observed_coverage": metrics["prediction_interval"]["observed_coverage"],
+            "mean_interval_width": metrics["prediction_interval"]["mean_interval_width"],
+        },
     }
     save_json(profile, config.monitoring.baseline_profile_path)
 

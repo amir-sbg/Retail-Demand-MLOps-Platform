@@ -63,6 +63,7 @@ class MonitoringConfig:
     mae_degradation_ratio: float = 1.20
     bias_alert_ratio: float = 0.50
     feature_mean_shift_threshold: float = 2.0
+    interval_coverage_ratio: float = 0.90
 
     def validate(self) -> None:
         if self.psi_threshold <= 0:
@@ -73,6 +74,8 @@ class MonitoringConfig:
             raise ValueError("bias_alert_ratio must be positive")
         if self.feature_mean_shift_threshold <= 0:
             raise ValueError("feature_mean_shift_threshold must be positive")
+        if not 0.0 < self.interval_coverage_ratio <= 1.0:
+            raise ValueError("interval_coverage_ratio must be in (0, 1]")
 
 
 @dataclass(frozen=True)

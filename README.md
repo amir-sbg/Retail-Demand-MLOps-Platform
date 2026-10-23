@@ -26,7 +26,7 @@ The example data includes seasonality, promotions, prices, stockouts, and store/
 - promotion scorecards with baseline and incumbent deltas
 - batch scoring and FastAPI serving
 - calibrated conformal intervals carried from validation into batch and API inference
-- prediction/feature drift checks, bias alerts, segment errors, and prioritized retraining plans
+- prediction/feature drift checks, interval coverage, bias alerts, segment errors, and prioritized retraining plans
 - pytest coverage, Docker packaging, and GitHub Actions CI
 
 ## Setup

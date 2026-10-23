@@ -48,6 +48,7 @@ def monitor_predictions(
         predictions,
     )
     quality = current.get("quality", {})
+    interval_quality = prediction_interval_report(predictions)
     segments = segment_quality_report(
         predictions,
         segment_columns=("store_id", "category"),
@@ -68,6 +69,15 @@ def monitor_predictions(
             if feature_drift
             else 0.0
         ),
+        interval_coverage=(
+            float(interval_quality["observed_coverage"])
+            if interval_quality
+            else None
+        ),
+        target_interval_coverage=(
+            float(baseline.get("prediction_interval", {}).get("target_coverage", 0.0))
+            or None
+        ),
     )
     retrain = bool(alerts)
     reason = str(alerts[0]["message"]) if alerts else "no retraining trigger crossed"
@@ -77,6 +87,7 @@ def monitor_predictions(
         "drift": drift,
         "feature_drift": feature_drift,
         "quality": quality,
+        "prediction_interval": interval_quality,
         "segments": segments,
         "alerts": alerts,
         "reference_mae": reference_mae,
@@ -95,6 +106,8 @@ def monitoring_alerts(
     config: MonitoringConfig,
     current_bias: float = 0.0,
     max_feature_shift: float = 0.0,
+    interval_coverage: float | None = None,
+    target_interval_coverage: float | None = None,
 ) -> list[dict[str, float | str]]:
     alerts: list[dict[str, float | str]] = []
     if psi >= config.psi_threshold:
@@ -117,6 +130,19 @@ def monitoring_alerts(
                 "message": "feature mean shift exceeded the monitoring threshold",
             }
         )
+
+    if interval_coverage is not None and target_interval_coverage is not None:
+        coverage_threshold = target_interval_coverage * config.interval_coverage_ratio
+        if interval_coverage < coverage_threshold:
+            alerts.append(
+                {
+                    "type": "interval_undercoverage",
+                    "severity": "high",
+                    "value": round(float(interval_coverage), 6),
+                    "threshold": round(float(coverage_threshold), 6),
+                    "message": "prediction interval coverage fell below its calibrated target",
+                }
+            )
 
     if reference_mae > 0:
         mae_threshold = reference_mae * config.mae_degradation_ratio
@@ -159,6 +185,34 @@ def monitoring_alerts(
                     }
                 )
     return alerts
+
+
+def prediction_interval_report(predictions: pd.DataFrame) -> dict[str, float | int]:
+    required = {"actual_units", "prediction_lower", "prediction_upper"}
+    bounds = {"prediction_lower", "prediction_upper"}
+    available_bounds = bounds.intersection(predictions.columns)
+    if not available_bounds:
+        return {}
+    if not required.issubset(predictions.columns):
+        missing = sorted(required.difference(predictions.columns))
+        raise ValueError(f"prediction interval log is missing columns: {missing}")
+
+    actual = predictions["actual_units"].to_numpy(dtype=float)
+    lower = predictions["prediction_lower"].to_numpy(dtype=float)
+    upper = predictions["prediction_upper"].to_numpy(dtype=float)
+    if actual.size == 0 or not np.all(np.isfinite([actual, lower, upper])):
+        raise ValueError("prediction interval values must be non-empty and finite")
+    if np.any(lower > upper):
+        raise ValueError("prediction interval lower bounds must not exceed upper bounds")
+
+    covered = (actual >= lower) & (actual <= upper)
+    return {
+        "rows": int(actual.size),
+        "observed_coverage": float(np.mean(covered)),
+        "mean_interval_width": float(np.mean(upper - lower)),
+        "below_interval_rate": float(np.mean(actual < lower)),
+        "above_interval_rate": float(np.mean(actual > upper)),
+    }
 
 
 def feature_mean_shift_report(
