@@ -13,6 +13,8 @@ from mlops_platform.features import build_feature_table
 from mlops_platform.inference import batch_predict, prediction_output_summary
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import (
+    inventory_cost_metrics,
+    pinball_loss,
     regression_metrics,
     rolling_origin_splits,
     split_conformal_summary,
@@ -176,6 +178,23 @@ def test_regression_metrics_include_demand_forecast_diagnostics() -> None:
     assert metrics["median_absolute_error"] == 3.0
     assert metrics["p90_absolute_error"] >= metrics["median_absolute_error"]
     assert metrics["rmsle"] > 0.0
+
+
+def test_asymmetric_demand_cost_penalizes_shortages_more() -> None:
+    report = inventory_cost_metrics(
+        [10.0, 10.0],
+        [8.0, 12.0],
+        underage_cost=3.0,
+        overage_cost=1.0,
+    )
+
+    assert report["total_inventory_cost"] == pytest.approx(8.0)
+    assert report["mean_shortage_units"] == pytest.approx(1.0)
+    assert report["mean_excess_units"] == pytest.approx(1.0)
+    assert report["implied_service_quantile"] == pytest.approx(0.75)
+    assert pinball_loss([10.0], [8.0], quantile=0.75) > pinball_loss(
+        [10.0], [12.0], quantile=0.75
+    )
 
 
 def test_split_conformal_interval_uses_validation_errors() -> None:

@@ -95,6 +95,35 @@ def regression_metrics(y_true, y_pred) -> dict[str, float]:
     }
 
 
+def pinball_loss(y_true, y_pred, quantile: float) -> float:
+    if not 0.0 < quantile < 1.0:
+        raise ValueError("quantile must be between zero and one")
+    actual, predicted = _matching_arrays(y_true, y_pred)
+    error = actual - predicted
+    return float(np.mean(np.maximum(quantile * error, (quantile - 1.0) * error)))
+
+
+def inventory_cost_metrics(
+    y_true,
+    y_pred,
+    underage_cost: float = 2.0,
+    overage_cost: float = 1.0,
+) -> dict[str, float]:
+    if underage_cost < 0 or overage_cost < 0 or underage_cost + overage_cost == 0:
+        raise ValueError("inventory costs must be non-negative with a positive total")
+    actual, predicted = _matching_arrays(y_true, y_pred)
+    shortage = np.maximum(actual - predicted, 0.0)
+    excess = np.maximum(predicted - actual, 0.0)
+    costs = underage_cost * shortage + overage_cost * excess
+    return {
+        "mean_inventory_cost": float(np.mean(costs)),
+        "total_inventory_cost": float(np.sum(costs)),
+        "mean_shortage_units": float(np.mean(shortage)),
+        "mean_excess_units": float(np.mean(excess)),
+        "implied_service_quantile": float(underage_cost / (underage_cost + overage_cost)),
+    }
+
+
 def residual_summary(y_true, y_pred) -> dict[str, float]:
     actual, predicted = _matching_arrays(y_true, y_pred)
     residuals = predicted - actual
