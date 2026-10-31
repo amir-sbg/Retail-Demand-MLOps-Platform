@@ -47,6 +47,7 @@ def monitor_predictions(
         baseline.get("features", {}),
         predictions,
     )
+    schema = feature_schema_report(baseline.get("features", {}), predictions)
     quality = current.get("quality", {})
     interval_quality = prediction_interval_report(predictions)
     segments = segment_quality_report(
@@ -86,6 +87,7 @@ def monitor_predictions(
         "rows": current["rows"],
         "drift": drift,
         "feature_drift": feature_drift,
+        "feature_schema": schema,
         "quality": quality,
         "prediction_interval": interval_quality,
         "segments": segments,
@@ -96,6 +98,31 @@ def monitor_predictions(
     }
     save_json(report, output_path)
     return report
+
+
+def feature_schema_report(reference_features: dict, observed: pd.DataFrame) -> dict:
+    expected = sorted(reference_features)
+    missing = [feature for feature in expected if feature not in observed.columns]
+    non_numeric = []
+    non_finite = []
+    for feature in expected:
+        if feature not in observed.columns:
+            continue
+        numeric = pd.to_numeric(observed[feature], errors="coerce").to_numpy(dtype=float)
+        if np.isnan(numeric).all() and len(numeric):
+            non_numeric.append(feature)
+        elif not np.all(np.isfinite(numeric)):
+            non_finite.append(feature)
+    present = len(expected) - len(missing)
+    return {
+        "expected_feature_count": len(expected),
+        "present_feature_count": present,
+        "coverage": present / len(expected) if expected else 1.0,
+        "missing_features": missing,
+        "non_numeric_features": non_numeric,
+        "non_finite_features": non_finite,
+        "valid": not missing and not non_numeric and not non_finite,
+    }
 
 
 def monitoring_alerts(

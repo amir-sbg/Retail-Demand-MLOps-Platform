@@ -22,6 +22,7 @@ from mlops_platform.metrics import (
     time_splits,
 )
 from mlops_platform.monitoring import (
+    feature_schema_report,
     feature_mean_shift_report,
     monitor_predictions,
     monitoring_alerts,
@@ -419,6 +420,18 @@ def test_feature_mean_shift_report_ranks_changed_inputs() -> None:
 
     assert rows[0]["feature"] == "price"
     assert rows[0]["standardized_shift"] == pytest.approx(5.5)
+
+
+def test_feature_schema_report_catches_missing_and_invalid_inputs() -> None:
+    report = feature_schema_report(
+        {"price": {"mean": 10.0}, "promotion": {"mean": 0.2}, "lag_7": {"mean": 8.0}},
+        pd.DataFrame({"price": [10.0, 11.0], "promotion": ["yes", "no"]}),
+    )
+
+    assert report["coverage"] == pytest.approx(2 / 3)
+    assert report["missing_features"] == ["lag_7"]
+    assert report["non_numeric_features"] == ["promotion"]
+    assert not report["valid"]
 
 
 def test_segment_quality_report_ranks_segments_by_error() -> None:
