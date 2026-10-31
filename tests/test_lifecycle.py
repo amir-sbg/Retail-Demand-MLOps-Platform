@@ -27,6 +27,7 @@ from mlops_platform.monitoring import (
     monitor_predictions,
     monitoring_alerts,
     prediction_interval_report,
+    rolling_quality_report,
     psi_from_bins,
     psi_from_stats,
     segment_quality_report,
@@ -448,6 +449,22 @@ def test_segment_quality_report_ranks_segments_by_error() -> None:
 
     assert rows[0]["segment"] == "store_id=s2"
     assert rows[0]["mae"] > rows[1]["mae"]
+
+
+def test_rolling_quality_report_exposes_recent_error_degradation() -> None:
+    predictions = pd.DataFrame(
+        {
+            "date": pd.date_range("2026-01-01", periods=6),
+            "actual_units": [10.0] * 6,
+            "predicted_units": [10.0, 11.0, 10.0, 15.0, 16.0, 17.0],
+        }
+    )
+
+    rows = rolling_quality_report(predictions, window_size=3)
+
+    assert len(rows) == 2
+    assert rows[1]["mae"] > rows[0]["mae"]
+    assert rows[1]["start_date"] == "2026-01-04"
 
 
 def test_prediction_interval_report_tracks_miss_direction() -> None:

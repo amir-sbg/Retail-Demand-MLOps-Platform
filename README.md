@@ -13,7 +13,7 @@ raw demand data
   -> retraining plan
 ```
 
-The example data includes seasonality, promotions, prices, stockouts, and store/SKU effects. A gradient-boosted regressor is compared with a simple baseline using WAPE, sMAPE, RMSLE, and median/tail absolute error. The modeling problem stays small so the data and deployment workflow are easy to follow.
+The example data includes seasonality, promotions, prices, stockouts, and store/SKU effects. A gradient-boosted regressor is compared with a simple baseline using WAPE, sMAPE, RMSLE, MASE, asymmetric inventory cost, and median/tail absolute error. The modeling problem stays small so the data and deployment workflow are easy to follow.
 
 ## Included
 
@@ -26,7 +26,7 @@ The example data includes seasonality, promotions, prices, stockouts, and store/
 - promotion scorecards with baseline and incumbent deltas
 - batch scoring and FastAPI serving
 - calibrated conformal intervals carried from validation into batch and API inference
-- prediction/feature drift checks, interval coverage, bias alerts, segment errors, and prioritized retraining plans
+- prediction/feature drift checks, serving-schema validation, rolling quality windows, interval coverage, bias alerts, segment errors, and prioritized retraining plans
 - pytest coverage, Docker packaging, and GitHub Actions CI
 
 ## Setup

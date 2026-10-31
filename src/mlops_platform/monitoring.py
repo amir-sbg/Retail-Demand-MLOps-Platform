@@ -55,6 +55,7 @@ def monitor_predictions(
         segment_columns=("store_id", "category"),
         min_rows=5,
     )
+    quality_windows = rolling_quality_report(predictions)
     reference_mae = float(baseline.get("reference_metrics", {}).get("mae", 0.0))
     current_mae = float(quality.get("mae", 0.0)) if quality else 0.0
     current_bias = float(quality.get("bias", 0.0)) if quality else 0.0
@@ -91,6 +92,7 @@ def monitor_predictions(
         "quality": quality,
         "prediction_interval": interval_quality,
         "segments": segments,
+        "quality_windows": quality_windows,
         "alerts": alerts,
         "reference_mae": reference_mae,
         "retrain_recommended": retrain,
@@ -311,6 +313,41 @@ def segment_quality_report(
 
     rows.sort(key=lambda row: (float(row["mae"]), float(row["rows"])), reverse=True)
     return rows[:10]
+
+
+def rolling_quality_report(
+    predictions: pd.DataFrame,
+    window_size: int = 50,
+) -> list[dict[str, float | int | str]]:
+    if window_size < 1:
+        raise ValueError("window_size must be positive")
+    required = {"actual_units", "predicted_units"}
+    if not required.issubset(predictions.columns):
+        return []
+    ordered = predictions.copy()
+    if "date" in ordered.columns:
+        ordered["date"] = pd.to_datetime(ordered["date"], errors="raise")
+        ordered = ordered.sort_values("date")
+
+    rows = []
+    for start in range(0, len(ordered), window_size):
+        window = ordered.iloc[start : start + window_size]
+        if window.empty:
+            continue
+        metrics = regression_metrics(window["actual_units"], window["predicted_units"])
+        row: dict[str, float | int | str] = {
+            "window": len(rows),
+            "start_row": start,
+            "rows": len(window),
+            "mae": metrics["mae"],
+            "wape": metrics["wape"],
+            "bias": metrics["bias"],
+        }
+        if "date" in window.columns:
+            row["start_date"] = str(window["date"].min().date())
+            row["end_date"] = str(window["date"].max().date())
+        rows.append(row)
+    return rows
 
 
 def psi_from_profile(reference: dict, observed: np.ndarray) -> float:
