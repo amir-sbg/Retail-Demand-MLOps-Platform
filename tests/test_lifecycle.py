@@ -14,6 +14,7 @@ from mlops_platform.inference import batch_predict, prediction_output_summary
 from mlops_platform.lake import build_bronze_table, build_silver_table
 from mlops_platform.metrics import (
     inventory_cost_metrics,
+    mean_absolute_scaled_error,
     pinball_loss,
     regression_metrics,
     rolling_origin_splits,
@@ -195,6 +196,24 @@ def test_asymmetric_demand_cost_penalizes_shortages_more() -> None:
     assert pinball_loss([10.0], [8.0], quantile=0.75) > pinball_loss(
         [10.0], [12.0], quantile=0.75
     )
+
+
+def test_mase_scales_error_against_seasonal_naive_forecast() -> None:
+    history = np.array([10.0, 20.0, 12.0, 22.0, 14.0, 24.0])
+
+    score = mean_absolute_scaled_error(
+        [16.0, 26.0],
+        [15.0, 25.0],
+        history,
+        seasonality=2,
+    )
+
+    assert score == pytest.approx(0.5)
+
+
+def test_mase_rejects_constant_seasonal_history() -> None:
+    with pytest.raises(ValueError, match="undefined"):
+        mean_absolute_scaled_error([2.0], [1.0], [5.0, 5.0, 5.0], seasonality=1)
 
 
 def test_split_conformal_interval_uses_validation_errors() -> None:

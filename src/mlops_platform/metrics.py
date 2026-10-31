@@ -124,6 +124,26 @@ def inventory_cost_metrics(
     }
 
 
+def mean_absolute_scaled_error(
+    y_true,
+    y_pred,
+    training_history,
+    seasonality: int = 7,
+) -> float:
+    if seasonality < 1:
+        raise ValueError("seasonality must be positive")
+    actual, predicted = _matching_arrays(y_true, y_pred)
+    history = np.asarray(training_history, dtype=float).reshape(-1)
+    if history.size <= seasonality:
+        raise ValueError("training history must be longer than the seasonal lag")
+    if not np.all(np.isfinite(history)):
+        raise ValueError("training history must contain only finite values")
+    scale = float(np.mean(np.abs(history[seasonality:] - history[:-seasonality])))
+    if scale <= np.finfo(float).eps:
+        raise ValueError("seasonal naive error is zero; MASE is undefined")
+    return float(np.mean(np.abs(actual - predicted)) / scale)
+
+
 def residual_summary(y_true, y_pred) -> dict[str, float]:
     actual, predicted = _matching_arrays(y_true, y_pred)
     residuals = predicted - actual
